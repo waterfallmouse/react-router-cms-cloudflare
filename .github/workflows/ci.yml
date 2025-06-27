@@ -20,10 +20,13 @@ jobs:
         run: bun install
 
       - name: Run linter
-        run: bun lint
+        run: bun run lint
 
       - name: Run tests
-        run: bun test
+        run: bun run test
+
+      - name: Run type checking
+        run: bun run typecheck
 
       - name: Build
         run: bun run build

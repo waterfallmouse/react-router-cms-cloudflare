@@ -17,7 +17,8 @@ export class MediaUrl {
 
   static fromR2(bucketName: string, r2Key: string, domain?: string): MediaUrl {
     const baseUrl = domain || `https://${bucketName}.r2.cloudflarestorage.com`;
-    const url = `${baseUrl}/${r2Key}`;
+    const normalizedR2Key = r2Key.replace(/^\/+/, '');
+    const url = `${baseUrl}/${normalizedR2Key}`;
     return MediaUrl.create(url);
   }
 

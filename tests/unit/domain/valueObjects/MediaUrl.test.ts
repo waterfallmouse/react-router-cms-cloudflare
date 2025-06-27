@@ -71,6 +71,22 @@ describe('MediaUrl', () => {
       
       expect(mediaUrl.value).toBe('https://my-bucket.r2.cloudflarestorage.com/photo.jpg');
     });
+
+    it('should normalize R2 key with leading slash', () => {
+      const bucketName = 'my-bucket';
+      const r2Key = '/images/photo.jpg';
+      const mediaUrl = MediaUrl.fromR2(bucketName, r2Key);
+      
+      expect(mediaUrl.value).toBe('https://my-bucket.r2.cloudflarestorage.com/images/photo.jpg');
+    });
+
+    it('should normalize R2 key with multiple leading slashes', () => {
+      const bucketName = 'my-bucket';
+      const r2Key = '///images/photo.jpg';
+      const mediaUrl = MediaUrl.fromR2(bucketName, r2Key);
+      
+      expect(mediaUrl.value).toBe('https://my-bucket.r2.cloudflarestorage.com/images/photo.jpg');
+    });
   });
 
   describe('fromCloudflareImages', () => {

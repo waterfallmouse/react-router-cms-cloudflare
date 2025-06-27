@@ -9,13 +9,13 @@ export class ContentDomainService {
    */
   async generateUniqueSlug(
     title: ContentTitle,
-    slugCheckFn: (slug: ContentSlug) => Promise<boolean>,
+    slugCheckFn: (slug: ContentSlug, excludeContentId?: ContentId) => Promise<boolean>,
     excludeContentId?: ContentId
   ): Promise<ContentSlug> {
     const baseSlug = ContentSlug.fromTitle(title.value);
     
     // Check if the base slug is unique
-    const isBaseSlugTaken = await slugCheckFn(baseSlug);
+    const isBaseSlugTaken = await slugCheckFn(baseSlug, excludeContentId);
     if (!isBaseSlugTaken) {
       return baseSlug;
     }
@@ -26,7 +26,7 @@ export class ContentDomainService {
     
     do {
       uniqueSlug = baseSlug.withSuffix(counter.toString());
-      const isTaken = await slugCheckFn(uniqueSlug);
+      const isTaken = await slugCheckFn(uniqueSlug, excludeContentId);
       
       if (!isTaken) {
         return uniqueSlug;
@@ -46,10 +46,10 @@ export class ContentDomainService {
    */
   async validateSlugUniqueness(
     slug: ContentSlug,
-    slugCheckFn: (slug: ContentSlug) => Promise<boolean>,
+    slugCheckFn: (slug: ContentSlug, excludeContentId?: ContentId) => Promise<boolean>,
     excludeContentId?: ContentId
   ): Promise<void> {
-    const isSlugTaken = await slugCheckFn(slug);
+    const isSlugTaken = await slugCheckFn(slug, excludeContentId);
     
     if (isSlugTaken) {
       throw new Error(`Slug "${slug.value}" is already in use`);

@@ -14,7 +14,7 @@ describe('ContentDomainService', () => {
   describe('generateUniqueSlug', () => {
     it('should return base slug when it is unique', async () => {
       const title = ContentTitle.create('My Test Title');
-      const slugCheckFn = async (slug: ContentSlug) => false; // Not taken
+      const slugCheckFn = async (slug: ContentSlug, excludeContentId?: ContentId) => false; // Not taken
       
       const result = await service.generateUniqueSlug(title, slugCheckFn);
       
@@ -24,7 +24,7 @@ describe('ContentDomainService', () => {
     it('should append suffix when base slug is taken', async () => {
       const title = ContentTitle.create('My Test Title');
       let callCount = 0;
-      const slugCheckFn = async (slug: ContentSlug) => {
+      const slugCheckFn = async (slug: ContentSlug, excludeContentId?: ContentId) => {
         callCount++;
         return callCount === 1; // First call (base slug) is taken, second call (suffixed) is not
       };
@@ -37,7 +37,7 @@ describe('ContentDomainService', () => {
     it('should increment suffix until unique slug is found', async () => {
       const title = ContentTitle.create('Popular Title');
       let callCount = 0;
-      const slugCheckFn = async (slug: ContentSlug) => {
+      const slugCheckFn = async (slug: ContentSlug, excludeContentId?: ContentId) => {
         callCount++;
         return callCount <= 3; // First 3 calls are taken, 4th is not
       };
@@ -49,7 +49,7 @@ describe('ContentDomainService', () => {
 
     it('should throw error when unable to generate unique slug after 1000 attempts', async () => {
       const title = ContentTitle.create('Always Taken Title');
-      const slugCheckFn = async (slug: ContentSlug) => true; // Always taken
+      const slugCheckFn = async (slug: ContentSlug, excludeContentId?: ContentId) => true; // Always taken
       
       await expect(service.generateUniqueSlug(title, slugCheckFn)).rejects.toThrow('Unable to generate unique slug after 1000 attempts');
     });
@@ -57,7 +57,10 @@ describe('ContentDomainService', () => {
     it('should work with excludeContentId parameter', async () => {
       const title = ContentTitle.create('Test Title');
       const excludeId = ContentId.create();
-      const slugCheckFn = async (slug: ContentSlug) => false;
+      const slugCheckFn = async (slug: ContentSlug, excludeContentId?: ContentId) => {
+        // When excludeContentId is provided, simulate that the slug exists but belongs to the excluded content
+        return excludeContentId ? false : true;
+      };
       
       const result = await service.generateUniqueSlug(title, slugCheckFn, excludeId);
       
@@ -68,14 +71,14 @@ describe('ContentDomainService', () => {
   describe('validateSlugUniqueness', () => {
     it('should not throw when slug is unique', async () => {
       const slug = ContentSlug.create('unique-slug');
-      const slugCheckFn = async (slug: ContentSlug) => false; // Not taken
+      const slugCheckFn = async (slug: ContentSlug, excludeContentId?: ContentId) => false; // Not taken
       
       await expect(service.validateSlugUniqueness(slug, slugCheckFn)).resolves.toBeUndefined();
     });
 
     it('should throw when slug is already taken', async () => {
       const slug = ContentSlug.create('taken-slug');
-      const slugCheckFn = async (slug: ContentSlug) => true; // Taken
+      const slugCheckFn = async (slug: ContentSlug, excludeContentId?: ContentId) => true; // Taken
       
       await expect(service.validateSlugUniqueness(slug, slugCheckFn)).rejects.toThrow('Slug "taken-slug" is already in use');
     });
@@ -83,9 +86,12 @@ describe('ContentDomainService', () => {
     it('should work with excludeContentId parameter', async () => {
       const slug = ContentSlug.create('test-slug');
       const excludeId = ContentId.create();
-      const slugCheckFn = async (slug: ContentSlug) => true;
+      const slugCheckFn = async (slug: ContentSlug, excludeContentId?: ContentId) => {
+        // When excludeContentId is provided, simulate that slug belongs to excluded content
+        return excludeContentId ? false : true;
+      };
       
-      await expect(service.validateSlugUniqueness(slug, slugCheckFn, excludeId)).rejects.toThrow('Slug "test-slug" is already in use');
+      await expect(service.validateSlugUniqueness(slug, slugCheckFn, excludeId)).resolves.toBeUndefined();
     });
   });
 

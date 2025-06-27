@@ -1,0 +1,70 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Content Management System Schema
+// Following DDD principles with clear entity boundaries
+
+model Content {
+  id        String   @id @default(cuid())
+  title     String
+  slug      String   @unique
+  body      String
+  excerpt   String?
+  status    String   @default("draft") // draft, published, archived
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relationships
+  contentTypeId String
+  contentType   ContentType @relation(fields: [contentTypeId], references: [id])
+  
+  // Media relationships
+  media Media[]
+  
+  @@map("contents")
+}
+
+model ContentType {
+  id          String   @id @default(cuid())
+  name        String   @unique // blog_post, page, custom_type
+  displayName String
+  description String?
+  fields      String   // JSON schema for dynamic fields
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relationships
+  contents Content[]
+  
+  @@map("content_types")
+}
+
+model Media {
+  id          String   @id @default(cuid())
+  filename    String
+  originalName String
+  mimeType    String
+  size        Int
+  url         String
+  r2Key       String   @unique // Cloudflare R2 storage key
+  alt         String?
+  caption     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relationships
+  contentId String?
+  content   Content? @relation(fields: [contentId], references: [id], onDelete: SetNull)
+  
+  @@map("media")
+}

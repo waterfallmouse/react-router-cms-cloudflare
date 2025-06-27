@@ -22,8 +22,8 @@ jobs:
       - name: Run linter
         run: bun run lint
 
-      - name: Run tests
-        run: bun test
+      - name: Run tests with coverage
+        run: bun test --coverage --fail-on-low-coverage 90 --reporter github
 
       - name: Run type checking
         run: bun run typecheck

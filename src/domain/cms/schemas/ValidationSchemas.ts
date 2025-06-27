@@ -11,7 +11,7 @@ export const ContentTitleSchema = z.string()
 
 export const ContentSlugSchema = z.string()
   .min(1, { message: 'Slug is required' })
-  .max(100, { message: 'Slug must be less than 100 characters' })
+  .max(100, { message: 'Slug must be at most 100 characters' })
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, {
     message: 'Slug must contain only lowercase letters, numbers, and hyphens'
   });

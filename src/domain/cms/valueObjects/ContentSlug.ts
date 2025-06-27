@@ -1,4 +1,5 @@
 import { ContentSlugSchema } from '../schemas/ValidationSchemas';
+import { slugifyTitle } from '../utils/slugify';
 
 export class ContentSlug {
   private readonly _value: string;
@@ -13,13 +14,7 @@ export class ContentSlug {
   }
 
   static fromTitle(title: string): ContentSlug {
-    const slug = title
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/[\s_-]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-    
+    const slug = slugifyTitle(title);
     return ContentSlug.create(slug);
   }
 

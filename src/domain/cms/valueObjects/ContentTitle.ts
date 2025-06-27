@@ -1,4 +1,5 @@
 import { ContentTitleSchema } from '../schemas/ValidationSchemas';
+import { slugifyTitle } from '../utils/slugify';
 
 export class ContentTitle {
   private readonly _value: string;
@@ -33,11 +34,6 @@ export class ContentTitle {
   }
 
   toSlugSuggestion(): string {
-    return this._value
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/[\s_-]+/g, '-')
-      .replace(/^-+|-+$/g, '');
+    return slugifyTitle(this._value);
   }
 }

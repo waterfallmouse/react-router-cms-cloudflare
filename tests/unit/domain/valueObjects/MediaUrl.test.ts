@@ -202,10 +202,24 @@ describe('MediaUrl', () => {
       expect(mediaUrl.isCloudflareR2()).toBe(true);
     });
 
+    it('should return true for exact r2.dev domain', () => {
+      const mediaUrl = MediaUrl.create('https://r2.dev/image.jpg');
+      
+      expect(mediaUrl.isCloudflareR2()).toBe(true);
+    });
+
     it('should return false for non-R2 URLs', () => {
       const mediaUrl = MediaUrl.create('https://example.com/image.jpg');
       
       expect(mediaUrl.isCloudflareR2()).toBe(false);
+    });
+
+    it('should return false for malicious domains that contain R2 strings', () => {
+      const maliciousUrl1 = MediaUrl.create('https://evil.r2.cloudflarestorage.com.attacker.com/image.jpg');
+      const maliciousUrl2 = MediaUrl.create('https://malicious-r2.dev-fake.com/image.jpg');
+      
+      expect(maliciousUrl1.isCloudflareR2()).toBe(false);
+      expect(maliciousUrl2.isCloudflareR2()).toBe(false);
     });
   });
 

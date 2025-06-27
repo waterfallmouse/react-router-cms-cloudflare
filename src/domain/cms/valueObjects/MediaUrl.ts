@@ -68,8 +68,9 @@ export class MediaUrl {
   }
 
   isCloudflareR2(): boolean {
-    return this.domain.includes('.r2.cloudflarestorage.com') || 
-           this.domain.includes('r2.dev');
+    return this.domain.endsWith('.r2.cloudflarestorage.com') || 
+           this.domain === 'r2.dev' ||
+           this.domain.endsWith('.r2.dev');
   }
 
   isCloudflareImages(): boolean {

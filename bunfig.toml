@@ -1,0 +1,10 @@
+# Bun configuration file
+[test]
+# Setup files to run before tests
+preload = ["./tests/setup.ts"]
+
+# Test timeout (in milliseconds)
+timeout = 30000
+
+# Coverage configuration
+coverage = true

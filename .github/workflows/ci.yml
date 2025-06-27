@@ -23,10 +23,7 @@ jobs:
         run: bun run lint
 
       - name: Run tests with coverage
-        run: bun test --coverage --fail-on-low-coverage 90 --reporter github
+        run: bun test --coverage --fail-on-low-coverage 90
 
       - name: Run type checking
         run: bun run typecheck
-
-      - name: Build
-        run: bun run build

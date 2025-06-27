@@ -78,6 +78,20 @@ describe('MediaFilename', () => {
       
       expect(mediaFilename.value).toMatch(/^\d+_document$/);
     });
+
+    it('should trim whitespace before sanitization', () => {
+      const originalName = '  my photo.jpg  ';
+      const mediaFilename = MediaFilename.fromOriginalName(originalName);
+      
+      expect(mediaFilename.value).toMatch(/^\d+_my photo\.jpg$/);
+    });
+
+    it('should handle filename with leading and trailing spaces around invalid characters', () => {
+      const originalName = '  my<>photo  ';
+      const mediaFilename = MediaFilename.fromOriginalName(originalName);
+      
+      expect(mediaFilename.value).toMatch(/^\d+_my__photo$/);
+    });
   });
 
   describe('value', () => {

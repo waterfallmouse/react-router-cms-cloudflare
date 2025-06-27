@@ -16,9 +16,8 @@ export class MediaFilename {
   }
 
   static fromOriginalName(originalName: string, contentId?: string): MediaFilename {
-    const sanitized = originalName
-      .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
-      .trim();
+    const trimmedFilename = originalName.trim();
+    const sanitized = trimmedFilename.replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
     
     if (sanitized.length === 0 || sanitized === '_'.repeat(sanitized.length)) {
       throw new Error('Filename cannot be empty after sanitization');

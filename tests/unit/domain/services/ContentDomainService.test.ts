@@ -110,6 +110,20 @@ describe('ContentDomainService', () => {
       expect(() => service.validateTitleAndSlugConsistency(title, slug)).not.toThrow();
     });
 
+    it('should allow completely different but valid custom slugs', () => {
+      const title = ContentTitle.create('Advanced JavaScript Tutorial');
+      const slug = ContentSlug.create('js-guide-2024');
+      
+      expect(() => service.validateTitleAndSlugConsistency(title, slug)).not.toThrow();
+    });
+
+    it('should allow custom slugs that are shorter versions of the title slug', () => {
+      const title = ContentTitle.create('My Very Long Article Title');
+      const slug = ContentSlug.create('long-article');
+      
+      expect(() => service.validateTitleAndSlugConsistency(title, slug)).not.toThrow();
+    });
+
     it('should throw for very short custom slug', () => {
       const title = ContentTitle.create('My Test Title');
       const slug = ContentSlug.create('ab');

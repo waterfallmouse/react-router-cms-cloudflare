@@ -62,9 +62,10 @@ export class ContentDomainService {
   validateTitleAndSlugConsistency(title: ContentTitle, slug: ContentSlug): void {
     const suggestedSlug = ContentSlug.fromTitle(title.value);
     
-    // Allow custom slugs but warn about inconsistencies
-    if (!slug.value.startsWith(suggestedSlug.value.split('-')[0])) {
+    if (slug.value !== suggestedSlug.value) {
       // This is a soft validation - we allow custom slugs but ensure they're reasonable
+      // Custom slugs must be consistent with the title-derived slug or meet specific criteria
+      
       if (slug.value.length < 3) {
         throw new Error('Custom slug must be at least 3 characters long');
       }
@@ -72,6 +73,9 @@ export class ContentDomainService {
       if (!slug.isValid()) {
         throw new Error('Custom slug must be URL-friendly');
       }
+      
+      // Optional: Check if custom slug has some relation to the title
+      // For now, we allow any valid custom slug that meets basic criteria
     }
   }
 

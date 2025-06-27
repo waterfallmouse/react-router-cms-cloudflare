@@ -7,7 +7,7 @@ export const ContentIdSchema = z.string().uuid({
 export const ContentTitleSchema = z.string()
   .trim()
   .min(1, { message: 'Title is required' })
-  .max(200, { message: 'Title must be less than 200 characters' });
+  .max(200, { message: 'Title must be at most 200 characters' });
 
 export const ContentSlugSchema = z.string()
   .min(1, { message: 'Slug is required' })

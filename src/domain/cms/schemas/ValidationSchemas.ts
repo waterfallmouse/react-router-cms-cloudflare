@@ -18,7 +18,7 @@ export const ContentSlugSchema = z.string()
 
 export const ContentBodySchema = z.string()
   .min(1, { message: 'Content body is required' })
-  .max(50000, { message: 'Content body must be less than 50,000 characters' });
+  .max(50000, { message: 'Content body must be at most 50,000 characters' });
 
 export const ContentStatusSchema = z.enum(['draft', 'published', 'archived'], {
   errorMap: () => ({ message: 'Status must be draft, published, or archived' })

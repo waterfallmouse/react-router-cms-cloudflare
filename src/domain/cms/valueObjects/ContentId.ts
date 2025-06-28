@@ -1,33 +1,27 @@
-import { randomUUID } from 'crypto';
 import { ContentIdSchema } from '../schemas/ValidationSchemas';
 
 export class ContentId {
-  private readonly _value: string;
-
-  private constructor(value: string) {
-    this._value = value;
+  constructor(private readonly value: string) {
+    const result = ContentIdSchema.safeParse(value);
+    if (!result.success) {
+      // biome-ignore lint/style/noThrowStatements: Domain logic requires throwing errors
+      throw new Error(`Invalid ContentId: ${result.error.issues[0].message}`);
+    }
   }
 
-  static create(value?: string): ContentId {
-    const id = value ?? randomUUID();
-    const validatedId = ContentIdSchema.parse(id);
-    return new ContentId(validatedId);
-  }
-
-  static fromString(value: string): ContentId {
-    const validatedId = ContentIdSchema.parse(value);
-    return new ContentId(validatedId);
-  }
-
-  get value(): string {
-    return this._value;
+  getValue(): string {
+    return this.value;
   }
 
   equals(other: ContentId): boolean {
-    return this._value === other._value;
+    return this.value === other.value;
   }
 
-  toString(): string {
-    return this._value;
+  static generate(): ContentId {
+    return new ContentId(crypto.randomUUID());
+  }
+
+  static fromString(value: string): ContentId {
+    return new ContentId(value);
   }
 }

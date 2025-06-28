@@ -1,39 +1,28 @@
 import { ContentTitleSchema } from '../schemas/ValidationSchemas';
-import { slugifyTitle } from '../utils/slugify';
+import { ContentSlug } from './ContentSlug';
 
 export class ContentTitle {
-  private readonly _value: string;
-
-  private constructor(value: string) {
-    this._value = value;
+  constructor(private readonly value: string) {
+    const result = ContentTitleSchema.safeParse(value);
+    if (!result.success) {
+      // biome-ignore lint/style/noThrowStatements: Domain logic requires throwing errors
+      throw new Error(`Invalid ContentTitle: ${result.error.issues[0].message}`);
+    }
   }
 
-  static create(value: string): ContentTitle {
-    const validatedTitle = ContentTitleSchema.parse(value);
-    return new ContentTitle(validatedTitle);
-  }
-
-  get value(): string {
-    return this._value;
-  }
-
-  get length(): number {
-    return this._value.length;
-  }
-
-  isEmpty(): boolean {
-    return this._value.length === 0;
+  getValue(): string {
+    return this.value;
   }
 
   equals(other: ContentTitle): boolean {
-    return this._value === other._value;
+    return this.value === other.value;
   }
 
-  toString(): string {
-    return this._value;
+  generateSlug(): ContentSlug {
+    return ContentSlug.fromTitle(this.value);
   }
 
-  toSlugSuggestion(): string {
-    return slugifyTitle(this._value);
+  static fromString(value: string): ContentTitle {
+    return new ContentTitle(value);
   }
 }

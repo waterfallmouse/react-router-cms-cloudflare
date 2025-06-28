@@ -1,35 +1,27 @@
-import { randomUUID } from 'crypto';
-import { MediaIdSchema, type MediaIdType } from '../schemas/ValidationSchemas';
+import { MediaIdSchema } from '../schemas/ValidationSchemas';
 
 export class MediaId {
-  private readonly _value: string;
-
-  private constructor(value: string) {
-    this._value = value;
-  }
-
-  static create(): MediaId {
-    const id = randomUUID();
-    return new MediaId(id);
-  }
-
-  static fromString(value: string): MediaId {
+  constructor(private readonly value: string) {
     const result = MediaIdSchema.safeParse(value);
     if (!result.success) {
-      throw new Error(`Invalid Media ID: ${result.error.errors[0].message}`);
+      // biome-ignore lint/style/noThrowStatements: Domain logic requires throwing errors
+      throw new Error(`Invalid MediaId: ${result.error.issues[0].message}`);
     }
-    return new MediaId(result.data);
   }
 
-  get value(): string {
-    return this._value;
+  getValue(): string {
+    return this.value;
   }
 
   equals(other: MediaId): boolean {
-    return this._value === other._value;
+    return this.value === other.value;
   }
 
-  toString(): string {
-    return this._value;
+  static generate(): MediaId {
+    return new MediaId(crypto.randomUUID());
+  }
+
+  static fromString(value: string): MediaId {
+    return new MediaId(value);
   }
 }

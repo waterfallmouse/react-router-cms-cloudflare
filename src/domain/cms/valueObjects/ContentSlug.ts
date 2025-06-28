@@ -1,50 +1,34 @@
 import { ContentSlugSchema } from '../schemas/ValidationSchemas';
-import { slugifyTitle } from '../utils/slugify';
 
 export class ContentSlug {
-  private readonly _value: string;
-
-  private constructor(value: string) {
-    this._value = value;
-  }
-
-  static create(value: string): ContentSlug {
-    const validatedSlug = ContentSlugSchema.parse(value);
-    return new ContentSlug(validatedSlug);
-  }
-
-  static fromTitle(title: string): ContentSlug {
-    const slug = slugifyTitle(title);
-    return ContentSlug.create(slug);
-  }
-
-  get value(): string {
-    return this._value;
-  }
-
-  get length(): number {
-    return this._value.length;
-  }
-
-  equals(other: ContentSlug): boolean {
-    return this._value === other._value;
-  }
-
-  toString(): string {
-    return this._value;
-  }
-
-  isValid(): boolean {
-    try {
-      ContentSlugSchema.parse(this._value);
-      return true;
-    } catch {
-      return false;
+  constructor(private readonly value: string) {
+    const result = ContentSlugSchema.safeParse(value);
+    if (!result.success) {
+      // biome-ignore lint/style/noThrowStatements: Domain logic requires throwing errors
+      throw new Error(`Invalid ContentSlug: ${result.error.issues[0].message}`);
     }
   }
 
-  withSuffix(suffix: string): ContentSlug {
-    const newSlug = `${this._value}-${suffix}`;
-    return ContentSlug.create(newSlug);
+  getValue(): string {
+    return this.value;
+  }
+
+  equals(other: ContentSlug): boolean {
+    return this.value === other.value;
+  }
+
+  static fromTitle(title: string): ContentSlug {
+    const slug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    return new ContentSlug(slug.substring(0, 100));
+  }
+
+  static fromString(value: string): ContentSlug {
+    return new ContentSlug(value);
   }
 }

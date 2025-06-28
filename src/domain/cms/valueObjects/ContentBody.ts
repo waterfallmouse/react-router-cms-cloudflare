@@ -1,68 +1,41 @@
 import { ContentBodySchema } from '../schemas/ValidationSchemas';
 
 export class ContentBody {
-  private readonly _value: string;
-
-  private constructor(value: string) {
-    this._value = value;
+  constructor(private readonly content: string) {
+    const result = ContentBodySchema.safeParse(content);
+    if (!result.success) {
+      // biome-ignore lint/style/noThrowStatements: Domain logic requires throwing errors
+      throw new Error(`Invalid ContentBody: ${result.error.issues[0].message}`);
+    }
   }
 
-  static create(value: string): ContentBody {
-    const validatedBody = ContentBodySchema.parse(value);
-    return new ContentBody(validatedBody);
+  getContent(): string {
+    return this.content;
   }
 
-  get value(): string {
-    return this._value;
-  }
+  generateExcerpt(maxLength: number = 200): string {
+    // マークダウン記法を除去して抜粋を生成
+    const plainText = this.content
+      .replace(/#{1,6}\s+/g, '') // ヘッダー
+      .replace(/\*\*(.*?)\*\*/g, '$1') // Bold
+      .replace(/\*(.*?)\*/g, '$1') // Italic
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Links
+      .replace(/`([^`]+)`/g, '$1') // Inline code
+      .replace(/```[\s\S]*?```/g, '') // Code blocks
+      .trim();
 
-  get length(): number {
-    return this._value.length;
-  }
-
-  get wordCount(): number {
-    return this._value.trim().split(/\s+/).filter(word => word.length > 0).length;
+    return plainText.length > maxLength ? `${plainText.substring(0, maxLength)}...` : plainText;
   }
 
   isEmpty(): boolean {
-    return this._value.trim().length === 0;
+    return this.content.trim().length === 0;
   }
 
   equals(other: ContentBody): boolean {
-    return this._value === other._value;
+    return this.content === other.content;
   }
 
-  toString(): string {
-    return this._value;
-  }
-
-  getExcerpt(maxLength: number = 200): string {
-    if (this._value.length <= maxLength) {
-      return this._value;
-    }
-    
-    const truncated = this._value.substring(0, maxLength);
-    const lastSpaceIndex = truncated.lastIndexOf(' ');
-    
-    if (lastSpaceIndex > 0) {
-      return truncated.substring(0, lastSpaceIndex) + '...';
-    }
-    
-    return truncated + '...';
-  }
-
-  hasMarkdown(): boolean {
-    const markdownPatterns = [
-      /#+\s/,
-      /\*\*.*\*\*/,
-      /\*.*\*/,
-      /```[\s\S]*?```/,
-      /`.*`/,
-      /\[.*\]\(.*\)/,
-      /^\s*[-*+]\s/m,
-      /^\s*\d+\.\s/m
-    ];
-    
-    return markdownPatterns.some(pattern => pattern.test(this._value));
+  static fromString(content: string): ContentBody {
+    return new ContentBody(content);
   }
 }

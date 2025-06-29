@@ -179,7 +179,7 @@ export abstract class StringValueObject extends ValueObjectBase<string> {
 }
 ```
 
-### 3.2 ContentId (統一パターン版)
+### 3.2 ContentId
 ```typescript
 // domain/cms/valueObjects/ContentId.ts
 export class ContentId extends IdentifierValueObject {
@@ -200,7 +200,7 @@ export class ContentId extends IdentifierValueObject {
 }
 ```
 
-### 3.3 ContentSlug (統一パターン版)
+### 3.3 ContentSlug
 ```typescript
 // domain/cms/valueObjects/ContentSlug.ts
 export class ContentSlug extends StringValueObject {
@@ -236,7 +236,7 @@ export class ContentSlug extends StringValueObject {
 }
 ```
 
-### 3.4 ContentTitle (統一パターン版)
+### 3.4 ContentTitle
 ```typescript
 // domain/cms/valueObjects/ContentTitle.ts
 export class ContentTitle extends StringValueObject {
@@ -269,7 +269,7 @@ export class ContentTitle extends StringValueObject {
 }
 ```
 
-### 3.5 ContentBody (統一パターン版)
+### 3.5 ContentBody
 ```typescript
 // domain/cms/valueObjects/ContentBody.ts
 export class ContentBody extends StringValueObject {

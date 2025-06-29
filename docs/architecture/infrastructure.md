@@ -83,12 +83,6 @@ model Media {
   
   @@index([contentId])
 }
-
-enum ContentStatus {
-  draft
-  published
-  archived
-}
 ```
 
 ### 2.3 マイグレーション戦略
@@ -265,19 +259,6 @@ database_id = "your-production-db-id"
 binding = "R2_BUCKET"
 bucket_name = "cms-media-prod"
 
-# Staging Environment
-[env.staging]
-vars = { NODE_ENV = "staging" }
-
-[[env.staging.d1_databases]]
-binding = "DB"
-database_name = "cms-db-staging"
-database_id = "your-staging-db-id"
-
-[[env.staging.r2_buckets]]
-binding = "R2_BUCKET"
-bucket_name = "cms-media-staging"
-
 # Development Environment
 [env.development]
 vars = { NODE_ENV = "development" }
@@ -296,8 +277,8 @@ bucket_name = "cms-media-dev"
 ```typescript
 // src/infrastructure/config/CloudflareEnv.ts
 export interface CloudflareEnv {
-  NODE_ENV: 'development' | 'staging' | 'production';
-  
+  NODE_ENV: 'development' | 'production';
+
   // Database
   DB: D1Database;
   DATABASE_URL: string;

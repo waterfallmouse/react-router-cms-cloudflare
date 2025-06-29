@@ -132,7 +132,7 @@ export interface BaseLogEntry {
   // サービス情報
   service: string;          // "cms-api"
   version: string;          // アプリバージョン
-  environment: string;      // "prod", "staging", "dev"
+  environment: string;      // "prod", "dev"
   
   // Cloudflare情報
   cloudflare?: {
@@ -192,7 +192,7 @@ export interface BaseLogEntry {
 | レベル | 使用場面 | 例 | 環境 |
 |--------|----------|-----|------|
 | **TRACE** | 詳細なデバッグ（開発のみ） | 変数の値、関数の入出力 | Dev |
-| **DEBUG** | デバッグ情報 | SQL実行、外部API呼び出し | Dev, Staging |
+| **DEBUG** | デバッグ情報 | SQL実行、外部API呼び出し | Dev |
 | **INFO** | 正常フロー | リクエスト開始/完了、正常な処理 | All |
 | **WARN** | 回復可能な問題 | リトライ実行、デフォルト値使用 | All |
 | **ERROR** | 処理失敗 | バリデーションエラー、DB接続失敗 | All |
@@ -617,17 +617,6 @@ export const LOGGING_CONFIGS: Record<string, LoggingConfig> = {
     enableSensitiveDataLogging: false,
   },
   
-  staging: {
-    minLogLevel: LogLevel.DEBUG,
-    enableBatching: true,
-    batchSize: 50,
-    batchTimeout: 5000,
-    enableAnalytics: true,
-    enablePerformanceLogging: true,
-    maxMessageLength: 1000,
-    enableSensitiveDataLogging: false,
-  },
-  
   development: {
     minLogLevel: LogLevel.TRACE,
     enableBatching: false,
@@ -679,12 +668,6 @@ compatibility_date = "2024-12-01"
 vars = { NODE_ENV = "production", LOG_LEVEL = "info" }
 analytics_engine_datasets = [
   { binding = "ANALYTICS", dataset = "cms_logs" }
-]
-
-[env.staging]
-vars = { NODE_ENV = "staging", LOG_LEVEL = "debug" }
-analytics_engine_datasets = [
-  { binding = "ANALYTICS", dataset = "cms_logs_staging" }
 ]
 
 [env.development]

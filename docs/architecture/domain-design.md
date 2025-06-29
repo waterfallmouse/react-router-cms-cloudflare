@@ -1535,8 +1535,6 @@ export class ContentTypeCreatedEvent {
 
 ---
 
-これでCMSドメインモデルの設計が完了です。次はアプリケーションサービス層の設計に進みましょうか？
-
 ## 関連ドキュメント
 - `blog-design-document.md` - モダンCMS設計書
 - `application-service-design.md` - CMSアプリケーションサービス層設計

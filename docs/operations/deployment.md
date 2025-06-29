@@ -5,7 +5,6 @@
 ### 1.1 環境構成
 ```
 production   # 本番環境 - your-domain.workers.dev
-├── staging  # ステージング環境 - staging.your-domain.workers.dev  
 └── develop  # 開発環境 - dev.your-domain.workers.dev
 ```
 
@@ -13,7 +12,6 @@ production   # 本番環境 - your-domain.workers.dev
 | 環境 | ドメイン | ブランチ | データベース | 目的 |
 |------|----------|----------|-------------|------|
 | **production** | your-domain.workers.dev | main | cms-db-prod | 本番運用 |
-| **staging** | staging.your-domain.workers.dev | develop | cms-db-staging | リリース前検証 |
 | **develop** | dev.your-domain.workers.dev | feature/* | cms-db-dev | 開発・テスト |
 
 ## 2. 自動デプロイ（CI/CD）
@@ -27,9 +25,9 @@ on:
   push:
     branches: 
       - main        # Production
-      - develop     # Staging
+      - develop     # Development
   pull_request:
-    branches: 
+s    branches: 
       - main        # PR validation
 
 jobs:
@@ -53,34 +51,6 @@ jobs:
       
       - name: Integration tests
         run: bun test --filter="integration/**/*"
-
-  deploy-staging:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/develop'
-    environment: staging
-    
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v1
-      
-      - name: Install dependencies
-        run: bun install
-      
-      - name: Build
-        run: bun run build
-      
-      - name: Deploy to Staging
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          environment: 'staging'
-          wranglerVersion: '3.0.0'
-      
-      - name: Run E2E tests against staging
-        run: bun test --filter="e2e/**/*"
-        env:
-          E2E_BASE_URL: https://staging.your-domain.workers.dev
 
   deploy-production:
     needs: test
@@ -128,9 +98,6 @@ environments:
 
 ### 3.1 基本デプロイコマンド
 ```bash
-# ステージング環境
-bun run deploy:staging
-
 # 本番環境
 bun run deploy:production
 
@@ -173,19 +140,15 @@ wrangler rollback --force [DEPLOYMENT_ID]
 
 ### 4.1 マイグレーション戦略
 ```
-Development → Staging → Production
-      ↓           ↓          ↓
-   Auto apply  Manual test  Manual apply
+Developments → Production
+      ↓           ↓
+   Auto apply  Manual apply
 ```
 
 ### 4.2 マイグレーション実行
 ```bash
 # 開発環境（自動）
 bun run db:migrate
-
-# ステージング環境（手動確認）
-wrangler d1 migrations list cms-db-staging --env staging
-wrangler d1 migrations apply cms-db-staging --env staging
 
 # 本番環境（手動実行）
 wrangler d1 migrations list cms-db --env production
@@ -244,22 +207,6 @@ database_id = "your-production-db-id"
 [[env.production.r2_buckets]]
 binding = "R2_BUCKET"
 bucket_name = "cms-media"
-
-[env.staging]
-name = "cms-api-staging"
-vars = { 
-  NODE_ENV = "staging",
-  SITE_URL = "https://staging.your-domain.workers.dev"
-}
-
-[[env.staging.d1_databases]]
-binding = "DB"
-database_name = "cms-db-staging"
-database_id = "your-staging-db-id"
-
-[[env.staging.r2_buckets]]
-binding = "R2_BUCKET"
-bucket_name = "cms-media-staging"
 ```
 
 ## 6. カスタムドメイン設定

@@ -197,17 +197,6 @@ export class ContentId extends IdentifierValueObject {
   static from(value: string): ContentId {
     return new ContentId(value);
   }
-
-  // 後方互換性のため残す（非推奨）
-  /** @deprecated Use ContentId.create() instead */
-  static generate(): ContentId {
-    return this.create();
-  }
-
-  /** @deprecated Use ContentId.from() instead */
-  static fromString(value: string): ContentId {
-    return this.from(value);
-  }
 }
 ```
 
@@ -244,12 +233,6 @@ export class ContentSlug extends StringValueObject {
       // 最大長制限
       .substring(0, 100);
   }
-
-  // 後方互換性のため残す（非推奨）
-  /** @deprecated Use ContentSlug.from() instead */
-  static fromString(value: string): ContentSlug {
-    return this.from(value);
-  }
 }
 ```
 
@@ -282,17 +265,6 @@ export class ContentTitle extends StringValueObject {
       return this.value;
     }
     return this.value.substring(0, maxLength - 3) + '...';
-  }
-
-  // 後方互換性のため残す（非推奨）
-  /** @deprecated Use ContentTitle.from() instead */
-  static fromString(value: string): ContentTitle {
-    return this.from(value);
-  }
-
-  /** @deprecated Use toSlug() instead */
-  generateSlug(): ContentSlug {
-    return this.toSlug();
   }
 }
 ```
@@ -370,22 +342,6 @@ export class ContentBody extends StringValueObject {
    */
   getWordCount(): number {
     return this.value.split(/\s+/).filter(word => word.length > 0).length;
-  }
-
-  // 後方互換性のため残す（非推奨）
-  /** @deprecated Use ContentBody.from() instead */
-  static fromString(content: string): ContentBody {
-    return this.from(content);
-  }
-
-  /** @deprecated Use getValue() instead */
-  getContent(): string {
-    return this.value;
-  }
-
-  /** @deprecated Use toExcerpt() instead */
-  generateExcerpt(maxLength: number = 200): string {
-    return this.toExcerpt(maxLength);
   }
 }
 ```
@@ -558,17 +514,6 @@ export class MediaR2Key extends StringValueObject {
     const filename = this.extractFilename();
     const dotIndex = filename.lastIndexOf('.');
     return dotIndex > 0 ? filename.substring(dotIndex + 1) : '';
-  }
-
-  // 後方互換性のため残す（非推奨）
-  /** @deprecated Use MediaR2Key.from() instead */
-  static fromString(value: string): MediaR2Key {
-    return this.from(value);
-  }
-
-  /** @deprecated Use MediaR2Key.forMedia() instead */
-  static generate(filename: MediaFilename, contentType?: string): MediaR2Key {
-    return this.forMedia(filename);
   }
 }
 ```

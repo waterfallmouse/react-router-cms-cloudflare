@@ -1,15 +1,16 @@
-# CMS ログ戦略設計書
+# CMS ログ戦略設計書 (Pino統合版)
 
 ## 1. 概要
 
 ### 1.1 設計目的
-Domain-Driven Design (DDD) アーキテクチャを採用したCloudflare Workers + React Router v7 CMS環境において、リクエスト横断でのトレース機能と包括的なログ管理を実現する。
+Domain-Driven Design (DDD) アーキテクチャを採用したCloudflare Workers + React Router v7 CMS環境において、Pinoログライブラリを使用した統一的なログ管理とリクエスト横断でのトレース機能を実現する。
 
 ### 1.2 設計原則
-- **CF-Ray活用**: CloudflareネイティブのトレーシングIDを最大活用
+- **Pino標準化**: 高性能な構造化ログライブラリの活用
+- **CF-Ray統合**: CloudflareネイティブのトレーシングIDとPinoの連携
 - **DDD準拠**: 各レイヤーの責務に応じたログ設計
-- **Workers最適化**: Edge Runtime制約に対応した効率的実装
-- **運用重視**: Cloudflare Analyticsとの統合による実用的な監視
+- **Workers最適化**: Edge Runtime制約に対応したPino Browser設定
+- **TypeScript対応**: 型安全なログ実装
 
 ### 1.3 対象範囲
 | 優先度 | 対象 | 詳細 |
@@ -18,15 +19,23 @@ Domain-Driven Design (DDD) アーキテクチャを採用したCloudflare Worker
 | **2. 公開サイト** | `/`, `/posts/*` | アクセスログ、パフォーマンスログ |
 | **3. API** | `/api/*` | 業務ログ、エラーログ |
 
-## 2. TraceID生成・伝播アーキテクチャ
+## 2. PinoセットアップとTraceID管理
 
-### 2.1 CF-Rayベースの戦略
+### 2.1 Pinoインストールと基本設定
+
+```bash
+# 依存ライブラリのインストール
+bun add pino
+bun add -D @types/pino
+```
+
+### 2.2 Cloudflare Workers用Pino設定
 
 ```typescript
-// CF-RayヘッダーをプライマリトレースIDとして活用
-// 例: CF-Ray: 84c8bf11cae33210-NRT
-//     [RequestID][Datacenter]
+// src/infrastructure/logging/PinoLogger.ts
+import pino from 'pino';
 
+// CF-RayベースのトレーシングID管理
 export class TraceIdManager {
   static extractCloudflareTraceId(request: Request): string {
     const cfRay = request.headers.get('cf-ray');
@@ -39,132 +48,261 @@ export class TraceIdManager {
     return `local-${timestamp}-${random}`;
   }
 }
+
+// Cloudflare Workers用Pino設定
+export function createPinoLogger({
+  level = 'info',
+  analyticsEngine,
+  environment = 'production'
+}: {
+  level?: string;
+  analyticsEngine?: AnalyticsEngineDataset;
+  environment?: string;
+}) {
+  return pino({
+    level,
+    browser: {
+      asObject: true,
+      write: (logObj: any) => {
+        // Console出力
+        console.log(JSON.stringify(logObj));
+        
+        // Analytics Engineに送信 (INFO以上)
+        if (analyticsEngine && logObj.level >= 30) {
+          analyticsEngine.writeDataPoint({
+            timestamp: new Date(logObj.time).toISOString(),
+            level: logObj.level,
+            levelName: pino.levels.labels[logObj.level],
+            message: logObj.msg,
+            traceId: logObj.traceId,
+            service: logObj.service,
+            environment,
+            // メタデータをフラット化
+            ...flattenObject(logObj),
+          });
+        }
+      }
+    },
+    base: {
+      service: 'cms-api',
+      version: process.env.APP_VERSION || '1.0.0',
+      environment,
+    },
+    timestamp: pino.stdTimeFunctions.isoTime,
+    serializers: pino.stdSerializers,
+  });
+}
+
+// ネストされたオブジェクトをフラット化
+function flattenObject(obj: any, prefix = ''): Record<string, any> {
+  const flattened: Record<string, any> = {};
+  
+  for (const key in obj) {
+    if (obj[key] !== null && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+      Object.assign(flattened, flattenObject(obj[key], `${prefix}${key}_`));
+    } else {
+      flattened[`${prefix}${key}`] = obj[key];
+    }
+  }
+  
+  return flattened;
+}
 ```
 
-### 2.2 Context伝播メカニズム
+### 2.3 Pino Child LoggerでのContext伝播
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                   Cloudflare Edge Network                    │
 ├─────────────────────────────────────────────────────────────┤
-│ Request → CF-Ray生成 → React Router v7 → Response           │
-│    ↓           ↓              ↓              ↓              │
-│ Access Log → Security Log → Business Log → Performance Log   │
+│ Request → CF-Ray + Pino Logger → React Router v7 → Response │
+│    ↓           ↓                    │                    │
+│ Base Logger → Child Logger(traceId) → Structured Logs        │
 └─────────────────────────────────────────────────────────────┘
                                ↓
 ┌─────────────────────────────────────────────────────────────┐
-│                    DDD Layered Logging                      │
+│                 DDD Layered Pino Logging                    │
 │ ┌─────────────┐ ┌──────────────┐ ┌─────────────────────┐    │
 │ │Presentation │ │ Application  │ │  Infrastructure     │    │
-│ │- HTTP logs  │ │- UseCase logs│ │- Repository logs    │    │
-│ │- Auth logs  │ │- Business    │ │- External API logs  │    │
+│ │- Child Logger│ │- UseCase logs│ │- Repository logs    │    │
+│ │- HTTP context│ │- Business    │ │- External API logs  │    │
 │ │- Route logs │ │  event logs  │ │- Database logs      │    │
 │ └─────────────┘ └──────────────┘ └─────────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
                                ↓
 ┌─────────────────────────────────────────────────────────────┐
-│               Cloudflare Analytics + Logs                   │
+│          Console + Cloudflare Analytics Engine              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 2.3 ContextManager実装
+### 2.4 Pino Context Manager実装
 
 ```typescript
-export class ContextManager {
-  private static contexts = new Map<string, LoggingContext>();
-  private static currentTraceId: string | null = null;
+// src/infrastructure/logging/PinoContextManager.ts
+import { Logger } from 'pino';
+
+export interface RequestContext {
+  traceId: string;
+  cfRay?: string;
+  userAgent?: string;
+  ipAddress?: string;
+  route: string;
+  method: string;
+  startTime: number;
+  cloudflare: {
+    country?: string;
+    datacenter?: string;
+    tlsVersion?: string;
+  };
+}
+
+export class PinoContextManager {
+  private static contexts = new Map<string, Logger>();
   
-  static createContext(request: Request, cloudflareContext: any): LoggingContext {
+  static createRequestLogger(
+    baseLogger: Logger, 
+    request: Request, 
+    cloudflareContext?: any
+  ): Logger {
     const traceId = TraceIdManager.extractCloudflareTraceId(request);
-    this.setCurrentTraceId(traceId);
+    const url = new URL(request.url);
     
-    const context: LoggingContext = {
+    const requestContext: RequestContext = {
       traceId,
-      cfRay: request.headers.get('cf-ray'),
-      userAgent: request.headers.get('user-agent') || 'unknown',
-      ipAddress: request.headers.get('cf-connecting-ip') || 'unknown',
-      route: new URL(request.url).pathname,
+      cfRay: request.headers.get('cf-ray') || undefined,
+      userAgent: request.headers.get('user-agent') || undefined,
+      ipAddress: request.headers.get('cf-connecting-ip') || undefined,
+      route: url.pathname,
       method: request.method,
       startTime: Date.now(),
       cloudflare: {
-        country: request.headers.get('cf-ipcountry'),
+        country: request.headers.get('cf-ipcountry') || undefined,
         datacenter: request.headers.get('cf-ray')?.split('-')[1],
-        tlsVersion: request.headers.get('cf-tls-version'),
+        tlsVersion: request.headers.get('cf-tls-version') || undefined,
       },
     };
     
-    this.contexts.set(traceId, context);
-    return context;
+    // Child Loggerを作成してContextを埋め込む
+    const requestLogger = baseLogger.child(requestContext);
+    this.contexts.set(traceId, requestLogger);
+    
+    return requestLogger;
+  }
+  
+  static getLogger(traceId: string): Logger | undefined {
+    return this.contexts.get(traceId);
+  }
+  
+  static cleanup(traceId: string): void {
+    this.contexts.delete(traceId);
+  }
+  
+  static getCurrentLogger(): Logger | undefined {
+    // AsyncLocalStorageの代替として、グローバル変数で管理
+    return this.contexts.values().next().value;
   }
 }
 ```
 
-## 3. ログレベル・構造化定義
+## 3. Pinoログレベルと構造化ログ
 
-### 3.1 ログレベル定義
+### 3.1 Pino標準ログレベルの活用
 
 ```typescript
-export enum LogLevel {
-  TRACE = 0,    // 詳細なデバッグ情報（開発時のみ）
-  DEBUG = 1,    // デバッグ情報
-  INFO = 2,     // 一般的な情報（正常なフロー）
-  WARN = 3,     // 警告（回復可能なエラー）
-  ERROR = 4,    // エラー（処理失敗、要調査）
-  FATAL = 5,    // 致命的エラー（システム停止レベル）
+// Pino標準レベルを使用
+import pino from 'pino';
+
+// Pinoレベル: trace(10), debug(20), info(30), warn(40), error(50), fatal(60)
+export const LOG_LEVELS = {
+  trace: 10,    // 詳細なデバッグ情報（開発時のみ）
+  debug: 20,    // デバッグ情報
+  info: 30,     // 一般的な情報（正常なフロー）
+  warn: 40,     // 警告（回復可能なエラー）
+  error: 50,    // エラー（処理失敗、要調査）
+  fatal: 60,    // 致命的エラー（システム停止レベル）
+} as const;
+
+// 業務固有メソッドの定義
+export interface BusinessLogger {
+  business(action: string, entity: string, entityId?: string, data?: any): void;
+  security(event: SecurityEvent, data?: any): void;
+  audit(action: string, entity: string, data?: any): void;
+}
+
+type SecurityEvent = 'auth_attempt' | 'auth_success' | 'auth_failure' | 'access_denied';
+
+// Pino Loggerの拡張
+export function createBusinessLogger(baseLogger: pino.Logger): pino.Logger & BusinessLogger {
+  const logger = baseLogger as pino.Logger & BusinessLogger;
   
-  // 業務固有レベル
-  BUSINESS = 6, // 業務ログ（コンテンツ作成・公開等）
-  SECURITY = 7, // セキュリティログ（認証・認可）
-  AUDIT = 8,    // 監査ログ（重要な操作履歴）
+  logger.business = (action: string, entity: string, entityId?: string, data?: any) => {
+    logger.info({
+      type: 'business',
+      business: { action, entity, entityId, ...data }
+    }, `Business: ${action} ${entity}`);
+  };
+  
+  logger.security = (event: SecurityEvent, data?: any) => {
+    logger.warn({ 
+      type: 'security',
+      security: { event, ...data }
+    }, `Security: ${event}`);
+  };
+  
+  logger.audit = (action: string, entity: string, data?: any) => {
+    logger.info({
+      type: 'audit',
+      audit: { action, entity, ...data }
+    }, `Audit: ${action} ${entity}`);
+  };
+  
+  return logger;
 }
 ```
 
-### 3.2 構造化ログフォーマット
+### 3.2 Pino構造化ログフォーマット
 
 ```typescript
-export interface BaseLogEntry {
-  // 必須フィールド
-  timestamp: string;        // ISO8601形式
-  level: LogLevel;
-  message: string;
-  traceId: string;          // = CF-Ray値
+// Pinoの標準構造を活用したログフォーマット
+export interface PinoLogContext {
+  // Pino標準フィールド (自動生成)
+  // time: number;     // Pinoが自動生成 (Unix timestamp)
+  // level: number;    // Pinoが自動生成 (10-60)
+  // msg: string;      // メッセージ
   
-  // サービス情報
+  // サービス情報 (baseフィールドで設定)
   service: string;          // "cms-api"
   version: string;          // アプリバージョン
-  environment: string;      // "prod", "dev"
+  environment: string;      // "production", "development"
+  
+  // リクエストコンテキスト (child loggerで設定)
+  traceId: string;          // CF-Ray値
+  cfRay?: string;
+  route: string;
+  method: string;
+  userAgent?: string;
+  ipAddress?: string;
+  userId?: string;
+  sessionId?: string;
   
   // Cloudflare情報
-  cloudflare?: {
-    cfRay: string;
+  cloudflare: {
     country?: string;       // cf-ipcountry
     datacenter?: string;    // CF-Rayのデータセンター部分
     tlsVersion?: string;    // cf-tls-version
   };
-  
-  // リクエスト情報
-  request?: {
-    method: string;
-    url: string;
-    userAgent?: string;
-    ipAddress?: string;
-    userId?: string;
-    sessionId?: string;
-  };
-  
+}
+
+// ログエントリ固有のフィールド
+export interface LogEntryFields {
   // パフォーマンス情報
   performance?: {
     duration: number;       // ミリ秒
     memoryUsage?: number;   // MB
   };
   
-  // エラー情報
-  error?: {
-    name: string;
-    message: string;
-    stack?: string;
-    code?: string;
-  };
+  // エラー情報 (Pino serializerで自動処理)
+  err?: Error;  // Pinoがerrフィールドを自動シリアル化
   
   // 業務情報
   business?: {
@@ -182,79 +320,115 @@ export interface BaseLogEntry {
     reason?: string;
   };
   
-  // 自由拡張フィールド
-  metadata?: Record<string, any>;
+  // 監査情報
+  audit?: {
+    action: string;
+    entity: string;
+    before?: any;
+    after?: any;
+  };
+  
+  // メタデータ (任意の追加情報)
+  [key: string]: any;
 }
+
+// TypeScript型定義の例
+type CmsLogger = pino.Logger<PinoLogContext>;
 ```
 
-### 3.3 ログレベル使い分けガイド
+### 3.3 Pinoログレベル使い分けガイド
 
-| レベル | 使用場面 | 例 | 環境 |
-|--------|----------|-----|------|
-| **TRACE** | 詳細なデバッグ（開発のみ） | 変数の値、関数の入出力 | Dev |
-| **DEBUG** | デバッグ情報 | SQL実行、外部API呼び出し | Dev |
-| **INFO** | 正常フロー | リクエスト開始/完了、正常な処理 | All |
-| **WARN** | 回復可能な問題 | リトライ実行、デフォルト値使用 | All |
-| **ERROR** | 処理失敗 | バリデーションエラー、DB接続失敗 | All |
-| **BUSINESS** | 業務操作 | コンテンツ作成、公開、削除 | All |
-| **SECURITY** | セキュリティ関連 | ログイン試行、認証失敗 | All |
-| **AUDIT** | 監査要求 | 重要データの変更履歴 | All |
+| Pinoレベル | 使用場面 | 例 | 環境 | メソッド |
+|------------|----------|-----|------|----------|
+| **trace(10)** | 詳細なデバッグ（開発のみ） | 変数の値、関数の入出力 | Dev | `logger.trace()` |
+| **debug(20)** | デバッグ情報 | SQL実行、外部API呼び出し | Dev | `logger.debug()` |
+| **info(30)** | 正常フロー | リクエスト開始/完了、正常な処理 | All | `logger.info()` |
+| **warn(40)** | 回復可能な問題 | リトライ実行、デフォルト値使用 | All | `logger.warn()` |
+| **error(50)** | 処理失敗 | バリデーションエラー、DB接続失敗 | All | `logger.error()` |
+| **fatal(60)** | 致命的エラー | システム停止レベル | All | `logger.fatal()` |
 
-## 4. DDD各レイヤーでの実装方式
+#### 業務固有メソッド
+| メソッド | 使用場面 | 例 | 内部レベル |
+|--------|----------|-----|------------|
+| **business()** | 業務操作 | コンテンツ作成、公開、削除 | info(30) |
+| **security()** | セキュリティ関連 | ログイン試行、認証失敗 | warn(40) |
+| **audit()** | 監査要求 | 重要データの変更履歴 | info(30) |
+
+#### 使用例
+```typescript
+// 基本ログ
+logger.info('Request started');
+logger.error({ err: error }, 'Operation failed');
+
+// 業務ログ
+logger.business('create', 'content', contentId, { title: 'New Post' });
+
+// セキュリティログ
+logger.security('auth_failure', { userId, reason: 'invalid_password' });
+
+// 監査ログ
+logger.audit('update', 'content', { before: oldData, after: newData });
+```
+
+## 4. DDD各レイヤーでのPino実装
 
 ### 4.1 Presentation Layer（React Router v7）
 
-#### HTTP Request/Response ログ
+#### HTTP Request/Response Pinoログ
 
 ```typescript
 // workers/app.ts
+import { createPinoLogger, createBusinessLogger } from '../src/infrastructure/logging/PinoLogger';
+import { PinoContextManager } from '../src/infrastructure/logging/PinoContextManager';
+
 export default {
   async fetch(request: Request, env: CloudflareEnv): Promise<Response> {
     const startTime = Date.now();
     
-    // 1. CF-Rayベースのログコンテキスト作成
-    const loggingContext = ContextManager.createContext(request, { env });
-    const logger = LoggerFactory.getInstance().createLogger(loggingContext.traceId);
+    // 1. Pino Base Logger作成
+    const baseLogger = createPinoLogger({
+      level: env.LOG_LEVEL || 'info',
+      analyticsEngine: env.ANALYTICS,
+      environment: env.NODE_ENV || 'production'
+    });
+    
+    // 2. リクエストコンテキスト付きChild Logger作成
+    const requestLogger = PinoContextManager.createRequestLogger(baseLogger, request, { env });
+    const logger = createBusinessLogger(requestLogger);
     
     const appLoadContext = {
       cloudflare: { env },
-      logging: loggingContext,
+      logger,  // Pino LoggerをContextに追加
     };
     
     try {
-      logger.info('Request started', {
-        cloudflare: {
-          cfRay: loggingContext.cfRay || 'unknown',
-          country: loggingContext.cloudflare?.country,
-          datacenter: loggingContext.cloudflare?.datacenter,
-        },
-        request: {
-          method: request.method,
-          url: new URL(request.url).pathname,
-          userAgent: request.headers.get('user-agent') || undefined,
-          ipAddress: request.headers.get('cf-connecting-ip') || undefined,
-        },
-      });
+      // リクエスト開始ログ
+      logger.info('Request started');
       
       const response = await server.fetch(request, appLoadContext);
       
       // アクセスログ出力
       const duration = Date.now() - startTime;
-      logger.access(request, { 
-        status: response.status,
-        size: parseInt(response.headers.get('content-length') || '0'),
-      }, duration);
+      logger.info({
+        type: 'access',
+        response: {
+          status: response.status,
+          size: parseInt(response.headers.get('content-length') || '0'),
+        },
+        performance: { duration }
+      }, `${request.method} ${new URL(request.url).pathname} ${response.status} ${duration}ms`);
       
-      ContextManager.cleanup(loggingContext.traceId);
+      PinoContextManager.cleanup(TraceIdManager.extractCloudflareTraceId(request));
       return response;
       
     } catch (error) {
       const duration = Date.now() - startTime;
-      logger.error('Request failed', error as Error, {
-        performance: { duration },
-      });
+      logger.error({
+        err: error,
+        performance: { duration }
+      }, `Request failed: ${(error as Error).message}`);
       
-      ContextManager.cleanup(loggingContext.traceId);
+      PinoContextManager.cleanup(TraceIdManager.extractCloudflareTraceId(request));
       throw error;
     }
   }
@@ -265,8 +439,11 @@ export default {
 
 ```typescript
 // app/routes/admin/content/new.tsx
+import type { ActionFunctionArgs } from 'react-router';
+import type { BusinessLogger } from '../../../src/infrastructure/logging/PinoLogger';
+
 export async function action({ request, context }: ActionFunctionArgs) {
-  const logger = LoggerFactory.getInstance().createLogger(context.logging.traceId);
+  const logger = context.logger as BusinessLogger;  // ContextからPino Loggerを取得
   
   try {
     logger.info('Content creation action started');
@@ -279,7 +456,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
     
     // バリデーションログ
     if (!contentData.title || !contentData.body) {
-      logger.warn('Validation failed: missing required fields');
+      logger.warn({
+        validation: { 
+          missing: ['title', 'body'].filter(field => !contentData[field as keyof typeof contentData])
+        }
+      }, 'Validation failed: missing required fields');
       return { error: 'Title and body are required' };
     }
     
@@ -287,14 +468,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const useCase = container.getCreateContentUseCase();
     const result = await useCase.execute(contentData);
     
-    // 業務ログ
+    // 業務ログ (Pino拡張メソッド)
     logger.business('create', 'content', result.id, { title: contentData.title });
-    logger.info('Content creation completed successfully');
+    logger.info({ contentId: result.id }, 'Content creation completed successfully');
     
     return redirect(`/admin/content/${result.id}`);
     
   } catch (error) {
-    logger.error('Content creation failed', error as Error);
+    logger.error({ err: error }, 'Content creation failed');
     return { error: 'Failed to create content' };
   }
 }
@@ -302,53 +483,53 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
 ### 4.2 Application Layer（UseCase）
 
-#### UseCase Decorator + Logging
+#### Pino UseCase Decorator + Logging
 
 ```typescript
-// src/application/decorators/LoggingDecorator.ts
+// src/application/decorators/PinoLoggingDecorator.ts
+import type { BusinessLogger } from '../../infrastructure/logging/PinoLogger';
+
 export function LoggedUseCase(entityName: string) {
   return function<T extends { new (...args: any[]): any }>(constructor: T) {
     return class extends constructor {
       async execute(...args: any[]): Promise<any> {
-        const currentTraceId = ContextManager.getCurrentTraceId() || 'unknown';
-        const logger = LoggerFactory.getInstance().createLogger(currentTraceId);
+        // DIコンテナからLoggerを取得
+        const logger = this.logger as BusinessLogger;
+        if (!logger) {
+          throw new Error('Logger not injected in UseCase');
+        }
         
         const startTime = Date.now();
         const useCaseName = constructor.name;
         
+        // UseCase専用のChild Logger作成
+        const useCaseLogger = logger.child({
+          useCase: useCaseName,
+          entity: entityName
+        });
+        
         try {
-          logger.info(`UseCase started: ${useCaseName}`, {
-            business: {
-              entity: entityName,
-              action: 'execute',
-              additionalData: { useCaseName },
-            },
-          });
+          useCaseLogger.info(`UseCase started: ${useCaseName}`);
           
           const result = await super.execute(...args);
           
           const duration = Date.now() - startTime;
-          logger.info(`UseCase completed: ${useCaseName}`, {
+          useCaseLogger.info({
             performance: { duration },
-            business: {
-              entity: entityName,
-              action: 'complete',
-              additionalData: { useCaseName },
-            },
-          });
+            result: { id: result?.id }
+          }, `UseCase completed: ${useCaseName}`);
+          
+          // 業務ログも出力
+          useCaseLogger.business('execute', entityName, result?.id);
           
           return result;
           
         } catch (error) {
           const duration = Date.now() - startTime;
-          logger.error(`UseCase failed: ${useCaseName}`, error as Error, {
-            performance: { duration },
-            business: {
-              entity: entityName,
-              action: 'error',
-              additionalData: { useCaseName },
-            },
-          });
+          useCaseLogger.error({
+            err: error,
+            performance: { duration }
+          }, `UseCase failed: ${useCaseName}`);
           throw error;
         }
       }
@@ -358,48 +539,63 @@ export function LoggedUseCase(entityName: string) {
 
 // UseCase実装例
 @Injectable(TOKENS.CreateContentUseCase)
-@LoggedUseCase('content')  // ← ログ装飾追加
+@LoggedUseCase('content')  // ← Pinoログ装飾追加
 export class CreateContentUseCase {
+  constructor(
+    private readonly contentRepository: ContentRepositoryInterface,
+    private readonly logger: BusinessLogger  // ← Pino LoggerをDI
+  ) {}
+  
   // 既存のビジネスロジック実装
 }
 ```
 
 ### 4.3 Infrastructure Layer（Repository + External Services）
 
-#### Repository Logging Wrapper
+#### Pino Repository Logging Wrapper
 
 ```typescript
-// src/infrastructure/repositories/LoggingRepositoryWrapper.ts
-export function withLogging<T>(repository: T, entityName: string): T {
+// src/infrastructure/repositories/PinoRepositoryWrapper.ts
+import type { BusinessLogger } from '../logging/PinoLogger';
+
+export function withPinoLogging<T>(repository: T, entityName: string, logger: BusinessLogger): T {
+  // Repository専用のChild Logger作成
+  const repoLogger = logger.child({
+    layer: 'infrastructure',
+    component: 'repository',
+    entity: entityName
+  });
+  
   return new Proxy(repository, {
     get(target: any, prop: string) {
       const originalMethod = target[prop];
       
       if (typeof originalMethod === 'function') {
         return async function(...args: any[]) {
-          const traceId = ContextManager.getCurrentTraceId() || 'unknown';
-          const logger = LoggerFactory.getInstance().createLogger(traceId);
-          
           const startTime = Date.now();
           const methodName = prop;
           
           try {
-            logger.debug(`Repository method started: ${entityName}.${methodName}`);
+            repoLogger.debug(`Repository method started: ${entityName}.${methodName}`);
             
             const result = await originalMethod.apply(target, args);
             
             const duration = Date.now() - startTime;
-            logger.debug(`Repository method completed: ${entityName}.${methodName}`, {
+            repoLogger.debug({
               performance: { duration },
-            });
+              operation: methodName,
+              resultCount: Array.isArray(result) ? result.length : result ? 1 : 0
+            }, `Repository method completed: ${entityName}.${methodName}`);
             
             return result;
             
           } catch (error) {
             const duration = Date.now() - startTime;
-            logger.error(`Repository method failed: ${entityName}.${methodName}`, error as Error, {
+            repoLogger.error({
+              err: error,
               performance: { duration },
-            });
+              operation: methodName
+            }, `Repository method failed: ${entityName}.${methodName}`);
             throw error;
           }
         };
@@ -409,23 +605,47 @@ export function withLogging<T>(repository: T, entityName: string): T {
     }
   });
 }
+
+// 使用例: DI Containerでの登録
+// this.register(TOKENS.ContentRepository, 
+//   (container) => withPinoLogging(
+//     new PrismaContentRepository(container.getPrismaClient()), 
+//     'content',
+//     container.getLogger()
+//   ), 
+//   'singleton'
+// );
 ```
 
-#### External Service Logging（R2 Storage例）
+#### Pino External Service Logging（R2 Storage例）
 
 ```typescript
 // src/infrastructure/external/CloudflareR2StorageService.ts
+import type { BusinessLogger } from '../logging/PinoLogger';
+
 export class CloudflareR2StorageService implements FileStorageService {
+  private readonly logger: BusinessLogger;
+  
+  constructor(
+    private readonly r2Bucket: R2Bucket,
+    logger: BusinessLogger
+  ) {
+    // R2サービス専用のChild Logger作成
+    this.logger = logger.child({
+      layer: 'infrastructure',
+      component: 'external-service',
+      service: 'cloudflare-r2'
+    });
+  }
+  
   async upload(key: string, buffer: ArrayBuffer, contentType: string): Promise<string> {
-    const traceId = ContextManager.getCurrentTraceId() || 'unknown';
-    const logger = LoggerFactory.getInstance().createLogger(traceId);
-    
     const startTime = Date.now();
     
     try {
-      logger.info('R2 upload started', {
-        metadata: { key, contentType, size: buffer.byteLength },
-      });
+      this.logger.info({
+        operation: 'upload',
+        file: { key, contentType, size: buffer.byteLength }
+      }, 'R2 upload started');
       
       await this.r2Bucket.put(key, buffer, {
         httpMetadata: { contentType },
@@ -434,203 +654,409 @@ export class CloudflareR2StorageService implements FileStorageService {
       const duration = Date.now() - startTime;
       const url = `https://r2.domain.com/${key}`;
       
-      logger.info('R2 upload completed', {
+      this.logger.info({
+        operation: 'upload',
         performance: { duration },
-        metadata: { key, url },
-      });
+        file: { key, url },
+        result: 'success'
+      }, 'R2 upload completed');
       
       return url;
       
     } catch (error) {
       const duration = Date.now() - startTime;
-      logger.error('R2 upload failed', error as Error, {
+      this.logger.error({
+        err: error,
+        operation: 'upload',
         performance: { duration },
-        metadata: { key },
-      });
+        file: { key }
+      }, 'R2 upload failed');
+      
       throw new FileUploadError(`Failed to upload to R2: ${(error as Error).message}`);
     }
   }
 }
 ```
 
-## 5. Cloudflare環境最適化
+## 5. Pino Cloudflare Workers最適化
 
 ### 5.1 Workers Runtime制約への対応
 
-#### メモリ使用量最適化
+#### Pinoメモリ使用量最適化
 
 ```typescript
-export class OptimizedLogger {
-  private static readonly MAX_LOG_BUFFER_SIZE = 50;
-  private static readonly LOG_BATCH_TIMEOUT = 5000; // 5秒でバッチ送信
+// src/infrastructure/logging/PinoOptimized.ts
+import pino from 'pino';
+
+// Cloudflare Workers用の最適化されたPino設定
+export function createOptimizedPinoLogger({
+  level = 'info',
+  analyticsEngine,
+  environment = 'production'
+}: {
+  level?: string;
+  analyticsEngine?: AnalyticsEngineDataset;
+  environment?: string;
+}) {
+  const MAX_LOG_BUFFER_SIZE = 50;
+  const LOG_BATCH_TIMEOUT = 5000; // 5秒でバッチ送信
   
-  private logBuffer: BaseLogEntry[] = [];
-  private batchTimer: NodeJS.Timeout | null = null;
+  let logBuffer: any[] = [];
+  let batchTimer: any = null;
   
-  private shouldBatch(level: LogLevel): boolean {
-    // WARN以下はバッチ、ERROR以上は即座に出力
-    return level <= LogLevel.WARN;
+  function shouldBatch(level: number): boolean {
+    // warn(40)以下はバッチ、error(50)以上は即座に出力
+    return level <= 40;
   }
   
-  private addToBuffer(logEntry: BaseLogEntry): void {
-    this.logBuffer.push(logEntry);
+  function flushBuffer(): void {
+    if (logBuffer.length === 0) return;
     
-    // バッファ上限チェック
-    if (this.logBuffer.length >= OptimizedLogger.MAX_LOG_BUFFER_SIZE) {
-      this.flushBuffer();
-    }
-    
-    // バッチタイマー設定
-    if (!this.batchTimer) {
-      this.batchTimer = setTimeout(() => {
-        this.flushBuffer();
-      }, OptimizedLogger.LOG_BATCH_TIMEOUT);
-    }
-  }
-  
-  private flushBuffer(): void {
-    if (this.logBuffer.length === 0) return;
-    
+    // バッチログとして出力
     console.log(JSON.stringify({
       type: 'batch_logs',
-      count: this.logBuffer.length,
-      logs: this.logBuffer,
+      count: logBuffer.length,
+      logs: logBuffer,
     }));
     
-    this.logBuffer = [];
-    if (this.batchTimer) {
-      clearTimeout(this.batchTimer);
-      this.batchTimer = null;
+    // Analytics Engineにバッチ送信
+    if (analyticsEngine) {
+      logBuffer.forEach(logObj => {
+        if (logObj.level >= 30) { // info以上
+          analyticsEngine.writeDataPoint({
+            timestamp: new Date(logObj.time).toISOString(),
+            level: logObj.level,
+            message: logObj.msg,
+            traceId: logObj.traceId,
+            service: logObj.service,
+            environment,
+            ...flattenLogObject(logObj),
+          });
+        }
+      });
+    }
+    
+    logBuffer = [];
+    if (batchTimer) {
+      clearTimeout(batchTimer);
+      batchTimer = null;
     }
   }
+  
+  return pino({
+    level,
+    browser: {
+      asObject: true,
+      write: (logObj: any) => {
+        if (shouldBatch(logObj.level)) {
+          // バッファに追加
+          logBuffer.push(logObj);
+          
+          if (logBuffer.length >= MAX_LOG_BUFFER_SIZE) {
+            flushBuffer();
+          } else if (!batchTimer) {
+            batchTimer = setTimeout(flushBuffer, LOG_BATCH_TIMEOUT);
+          }
+        } else {
+          // 即座出力 (error, fatal)
+          console.log(JSON.stringify(logObj));
+          
+          if (analyticsEngine && logObj.level >= 30) {
+            analyticsEngine.writeDataPoint({
+              timestamp: new Date(logObj.time).toISOString(),
+              level: logObj.level,
+              message: logObj.msg,
+              traceId: logObj.traceId,
+              service: logObj.service,
+              environment,
+              ...flattenLogObject(logObj),
+            });
+          }
+        }
+      }
+    },
+    base: {
+      service: 'cms-api',
+      version: process.env.APP_VERSION || '1.0.0',
+      environment,
+    },
+    timestamp: pino.stdTimeFunctions.isoTime,
+    serializers: pino.stdSerializers,
+  });
+}
+
+function flattenLogObject(obj: any, prefix = ''): Record<string, any> {
+  const flattened: Record<string, any> = {};
+  
+  for (const key in obj) {
+    if (obj[key] !== null && typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
+      Object.assign(flattened, flattenLogObject(obj[key], `${prefix}${key}_`));
+    } else {
+      flattened[`${prefix}${key}`] = obj[key];
+    }
+  }
+  
+  return flattened;
 }
 ```
 
-#### CPU時間制限への対応
+#### Pino CPU時間制限への対応
 
 ```typescript
-export class PerformanceAwareLogger extends OptimizedLogger {
-  private static readonly MAX_EXECUTION_TIME = 50; // 50ms制限
-  private operationStartTime: number = 0;
+// src/infrastructure/logging/PinoPerformanceAware.ts
+import pino from 'pino';
+
+// パフォーマンスを意識したPinoラッパー
+export function createPerformanceAwarePinoLogger(baseLogger: pino.Logger): pino.Logger {
+  const MAX_EXECUTION_TIME = 50; // 50ms制限
   
-  protected log(level: LogLevel, message: string, data?: Partial<BaseLogEntry>): void {
-    this.operationStartTime = Date.now();
-    
-    try {
-      // 処理時間チェック
-      if (this.isExecutionTimeExceeded()) {
-        // 最小限のログ出力
-        console.log(JSON.stringify({
-          timestamp: new Date().toISOString(),
-          level,
-          message: 'Log processing timeout - simplified entry',
-          traceId: this.context.traceId,
-        }));
-        return;
+  return new Proxy(baseLogger, {
+    get(target, prop) {
+      const originalMethod = target[prop as keyof pino.Logger];
+      
+      // ログメソッドのみをラップ
+      if (typeof originalMethod === 'function' && 
+          ['trace', 'debug', 'info', 'warn', 'error', 'fatal'].includes(prop as string)) {
+        
+        return function(this: pino.Logger, ...args: any[]) {
+          const operationStartTime = Date.now();
+          
+          try {
+            // 処理時間チェック
+            const checkTime = () => {
+              return (Date.now() - operationStartTime) > MAX_EXECUTION_TIME;
+            };
+            
+            if (checkTime()) {
+              // 最小限のフォールバックログ
+              console.log(JSON.stringify({
+                time: Date.now(),
+                level: 40, // warn
+                msg: 'Log processing timeout - simplified entry',
+                service: 'cms-api',
+              }));
+              return;
+            }
+            
+            // 元のメソッドを実行
+            return originalMethod.apply(this, args);
+            
+          } catch (error) {
+            // フォールバック：最小限のエラーログ
+            console.log(JSON.stringify({
+              time: Date.now(),
+              level: 50, // error
+              msg: `Logging error: ${(error as Error).message}`,
+              service: 'cms-api',
+            }));
+          }
+        };
       }
       
-      super.log(level, message, data);
-      
-    } catch (error) {
-      // フォールバック：最小限のログ
-      console.log(JSON.stringify({
-        timestamp: new Date().toISOString(),
-        level: LogLevel.ERROR,
-        message: `Logging error: ${(error as Error).message}`,
-        traceId: this.context.traceId,
-      }));
+      return originalMethod;
     }
-  }
-  
-  private isExecutionTimeExceeded(): boolean {
-    return (Date.now() - this.operationStartTime) > PerformanceAwareLogger.MAX_EXECUTION_TIME;
-  }
+  });
+}
+
+// 使用例
+export function createProductionPinoLogger(config: any): pino.Logger {
+  const optimizedLogger = createOptimizedPinoLogger(config);
+  return createPerformanceAwarePinoLogger(optimizedLogger);
 }
 ```
 
-### 5.2 Cloudflare Analytics統合
+### 5.2 Pino + Cloudflare Analytics Engine統合
 
 ```typescript
-export class CloudflareAnalyticsLogger extends PerformanceAwareLogger {
-  constructor(
-    context: LoggerContext,
-    private analyticsEngine?: AnalyticsEngineDataset
-  ) {
-    super(context);
-  }
+// src/infrastructure/logging/PinoAnalyticsIntegration.ts
+import pino from 'pino';
+
+// Analytics Engine統合ファクトリー
+export function createPinoWithAnalytics({
+  level = 'info',
+  analyticsEngine,
+  environment = 'production'
+}: {
+  level?: string;
+  analyticsEngine?: AnalyticsEngineDataset;
+  environment?: string;
+}): pino.Logger {
   
-  async sendToAnalytics(entry: BaseLogEntry): Promise<void> {
-    if (!this.analyticsEngine) return;
+  async function sendToAnalytics(logObj: any): Promise<void> {
+    if (!analyticsEngine) return;
     
     try {
       const analyticsData = {
-        timestamp: entry.timestamp,
-        traceId: entry.traceId,
-        level: LogLevel[entry.level],
-        service: entry.service,
-        environment: entry.environment,
+        timestamp: new Date(logObj.time).toISOString(),
+        traceId: logObj.traceId,
+        level: logObj.level,
+        levelName: pino.levels.labels[logObj.level] || 'unknown',
+        message: logObj.msg,
+        service: logObj.service,
+        environment,
         
         // ディメンション（フィルタリング用）
-        method: entry.request?.method,
-        route: entry.request?.url,
-        status: entry.response?.status,
-        country: entry.cloudflare?.country,
-        datacenter: entry.cloudflare?.datacenter,
+        method: logObj.method,
+        route: logObj.route,
+        status: logObj.response_status,
+        country: logObj.cloudflare_country,
+        datacenter: logObj.cloudflare_datacenter,
         
         // メトリクス（集計用）
-        duration: entry.performance?.duration || 0,
-        responseSize: entry.response?.size || 0,
-        errorCount: entry.level >= LogLevel.ERROR ? 1 : 0,
+        duration: logObj.performance_duration || 0,
+        responseSize: logObj.response_size || 0,
+        errorCount: logObj.level >= 50 ? 1 : 0, // error(50)以上
         
         // 業務メトリクス
-        businessEntity: entry.business?.entity,
-        businessAction: entry.business?.action,
+        businessEntity: logObj.business_entity,
+        businessAction: logObj.business_action,
+        
+        // ユーザー情報
+        userId: logObj.userId,
+        sessionId: logObj.sessionId,
       };
       
-      this.analyticsEngine.writeDataPoint(analyticsData);
+      analyticsEngine.writeDataPoint(analyticsData);
       
     } catch (error) {
       // Analytics送信失敗は処理を止めない
       console.log(JSON.stringify({
-        timestamp: new Date().toISOString(),
-        level: LogLevel.WARN,
-        message: 'Failed to send to Analytics Engine',
-        traceId: this.context.traceId,
+        time: Date.now(),
+        level: 40, // warn
+        msg: 'Failed to send to Analytics Engine',
+        service: 'cms-api',
+        err: {
+          message: (error as Error).message,
+          name: (error as Error).name
+        }
       }));
     }
   }
+  
+  return pino({
+    level,
+    browser: {
+      asObject: true,
+      write: (logObj: any) => {
+        // Console出力
+        console.log(JSON.stringify(logObj));
+        
+        // Analytics Engineに送信 (info以上)
+        if (logObj.level >= 30) {
+          sendToAnalytics(logObj).catch(() => {
+            // エラーをサイレントに処理
+          });
+        }
+      }
+    },
+    base: {
+      service: 'cms-api',
+      version: process.env.APP_VERSION || '1.0.0',
+      environment,
+    },
+    timestamp: pino.stdTimeFunctions.isoTime,
+    serializers: {
+      ...pino.stdSerializers,
+      // エラーオブジェクトのシリアライズをカスタム
+      err: (err: Error) => ({
+        name: err.name,
+        message: err.message,
+        stack: err.stack,
+      })
+    },
+  });
 }
 ```
 
-### 5.3 Environment別設定
+### 5.3 Pino Environment別設定
 
 ```typescript
-export const LOGGING_CONFIGS: Record<string, LoggingConfig> = {
+// src/infrastructure/logging/PinoConfig.ts
+export interface PinoLoggingConfig {
+  level: string;
+  enableBatching: boolean;
+  batchSize: number;
+  batchTimeout: number;
+  enableAnalytics: boolean;
+  enablePerformanceLogging: boolean;
+  maxMessageLength: number;
+  enableSensitiveDataLogging: boolean;
+  prettyPrint: boolean;
+}
+
+export const PINO_CONFIGS: Record<string, PinoLoggingConfig> = {
   production: {
-    minLogLevel: LogLevel.INFO,
+    level: 'info',              // info(30)以上
     enableBatching: true,
     batchSize: 100,
-    batchTimeout: 10000,
+    batchTimeout: 10000,         // 10秒
     enableAnalytics: true,
     enablePerformanceLogging: true,
     maxMessageLength: 500,
     enableSensitiveDataLogging: false,
+    prettyPrint: false,          // JSON形式で出力
   },
   
   development: {
-    minLogLevel: LogLevel.TRACE,
-    enableBatching: false,
+    level: 'trace',             // trace(10)以上（全て）
+    enableBatching: false,       // 即座出力
     batchSize: 1,
     batchTimeout: 0,
-    enableAnalytics: false,
+    enableAnalytics: false,      // ローカルでは無効
     enablePerformanceLogging: false,
     maxMessageLength: 10000,
     enableSensitiveDataLogging: true,
+    prettyPrint: true,           // 読みやすい形式
+  },
+  
+  staging: {
+    level: 'debug',             // debug(20)以上
+    enableBatching: true,
+    batchSize: 50,
+    batchTimeout: 5000,          // 5秒
+    enableAnalytics: true,
+    enablePerformanceLogging: true,
+    maxMessageLength: 1000,
+    enableSensitiveDataLogging: true,
+    prettyPrint: false,
   },
 };
+
+// 環境別Loggerファクトリー
+export function createEnvironmentLogger(
+  environment: string,
+  analyticsEngine?: AnalyticsEngineDataset
+): pino.Logger {
+  const config = PINO_CONFIGS[environment] || PINO_CONFIGS.production;
+  
+  if (environment === 'development') {
+    // 開発環境: シンプルなPino
+    return pino({
+      level: config.level,
+      transport: config.prettyPrint ? {
+        target: 'pino-pretty',
+        options: {
+          colorize: true,
+          translateTime: 'SYS:standard',
+        }
+      } : undefined,
+      base: {
+        service: 'cms-api',
+        environment,
+      }
+    });
+  } else {
+    // 本番/ステージング: 最適化されたPino
+    return createProductionPinoLogger({
+      level: config.level,
+      analyticsEngine,
+      environment,
+    });
+  }
+}
 ```
 
-## 6. 実装ガイド
+## 6. Pino実装ガイド
 
 ### 6.1 ディレクトリ構造
 
@@ -638,23 +1064,22 @@ export const LOGGING_CONFIGS: Record<string, LoggingConfig> = {
 src/
 ├── infrastructure/
 │   ├── logging/
+│   │   ├── PinoLogger.ts              # Pino基本設定と拡張
+│   │   ├── PinoContextManager.ts      # Context管理
+│   │   ├── PinoConfig.ts              # 環境別設定
+│   │   ├── PinoOptimized.ts           # Workers最適化
+│   │   ├── PinoPerformanceAware.ts    # パフォーマンス対応
+│   │   ├── PinoAnalyticsIntegration.ts # Analytics Engine統合
 │   │   ├── TraceIdManager.ts          # CF-Ray管理
-│   │   ├── ContextManager.ts          # Context管理
-│   │   ├── LoggerFactory.ts           # ファクトリー
-│   │   ├── Logger.ts                  # 基本Logger
-│   │   ├── OptimizedLogger.ts         # 最適化Logger
-│   │   ├── PerformanceAwareLogger.ts  # パフォーマンス対応
-│   │   ├── CloudflareAnalyticsLogger.ts # Analytics統合
-│   │   ├── LogEntry.ts                # ログエントリ定義
-│   │   └── LogLevel.ts                # ログレベル定義
+│   │   └── types.ts                   # TypeScript型定義
 │   └── repositories/
-│       └── LoggingRepositoryWrapper.ts # Repository Wrapper
+│       └── PinoRepositoryWrapper.ts   # Repository Wrapper
 ├── application/
 │   └── decorators/
-│       └── LoggingDecorator.ts        # UseCase Decorator
+│       └── PinoLoggingDecorator.ts    # UseCase Decorator
 └── presentation/
     └── middleware/
-        └── LoggingMiddleware.ts       # HTTP Middleware
+        └── PinoMiddleware.ts          # HTTP Middleware
 ```
 
 ### 6.2 設定ファイル
@@ -664,57 +1089,139 @@ src/
 name = "cms-api"
 compatibility_date = "2024-12-01"
 
+# Node.js互換性を有効化 (Pinoのため)
+[compatibility_flags]
+node_compat = true
+
 [env.production]
-vars = { NODE_ENV = "production", LOG_LEVEL = "info" }
+vars = { 
+  NODE_ENV = "production", 
+  LOG_LEVEL = "info",
+  APP_VERSION = "1.0.0"
+}
 analytics_engine_datasets = [
   { binding = "ANALYTICS", dataset = "cms_logs" }
 ]
 
+[env.staging]
+vars = { 
+  NODE_ENV = "staging", 
+  LOG_LEVEL = "debug",
+  APP_VERSION = "1.0.0-staging"
+}
+analytics_engine_datasets = [
+  { binding = "ANALYTICS", dataset = "cms_logs_staging" }
+]
+
 [env.development]
-vars = { NODE_ENV = "development", LOG_LEVEL = "trace" }
+vars = { 
+  NODE_ENV = "development", 
+  LOG_LEVEL = "trace",
+  APP_VERSION = "1.0.0-dev"
+}
 ```
 
-### 6.3 使用例
+```json
+// package.json (追加依存)
+{
+  "dependencies": {
+    "pino": "^8.17.0"
+  },
+  "devDependencies": {
+    "@types/pino": "^7.0.5",
+    "pino-pretty": "^10.3.0"
+  }
+}
+```
 
-#### Basic Logging
+### 6.3 Pino使用例
+
+#### Basic Pino Logging
 ```typescript
-const logger = LoggerFactory.getInstance().createLogger(traceId);
+// コンテキストからPino Loggerを取得
+const logger = context.logger as BusinessLogger;
 
-// 基本ログ
+// 基本ログ (Pino標準)
 logger.info('Operation started');
-logger.error('Operation failed', error);
+logger.error({ err: error }, 'Operation failed');
 
-// 業務ログ
-logger.business('create', 'content', contentId);
+// 構造化ログ
+logger.info({
+  operation: 'create_content',
+  performance: { duration: 150 },
+  user: { id: userId }
+}, 'Content creation completed');
+
+// Child Loggerでコンテキストを継承
+const childLogger = logger.child({ operation: 'file_upload' });
+childLogger.info('Starting file upload');
+
+// 業務ログ (拡張メソッド)
+logger.business('create', 'content', contentId, { title: 'New Post' });
 
 // セキュリティログ
 logger.security('auth_failure', { userId, reason: 'invalid_password' });
+
+// 監査ログ
+logger.audit('update', 'content', { before: oldData, after: newData });
 ```
 
-#### UseCase Logging
+#### Pino UseCase Logging
 ```typescript
 @Injectable(TOKENS.CreateContentUseCase)
 @LoggedUseCase('content')
 export class CreateContentUseCase {
+  constructor(
+    private readonly contentRepository: ContentRepositoryInterface,
+    private readonly logger: BusinessLogger  // ← Pino LoggerをDI
+  ) {}
+  
   async execute(request: CreateContentRequest): Promise<ContentResponse> {
-    // ログは自動出力される
+    // Decoratorが自動でログ出力
+    // 手動でも追加ログ可能
+    this.logger.debug({ request }, 'Processing create content request');
+    
     return await this.transactionManager.executeInTransaction(async () => {
       // ビジネスロジック
+      const content = new Content(request.title, request.body);
+      return await this.contentRepository.save(content);
     });
   }
 }
 ```
 
-#### Repository Logging
+#### Pino Repository Logging
 ```typescript
 // DI Container での登録
 this.register(TOKENS.ContentRepository, 
-  () => withLogging(
-    new PrismaContentRepository(this.getPrismaClient()), 
-    'content'
+  (container) => withPinoLogging(
+    new PrismaContentRepository(container.getPrismaClient()), 
+    'content',
+    container.getLogger()  // ← Pino Loggerを渡す
   ), 
   'singleton'
 );
+```
+
+#### 環境別Logger初期化
+```typescript
+// workers/app.ts
+import { createEnvironmentLogger } from '../src/infrastructure/logging/PinoConfig';
+
+export default {
+  async fetch(request: Request, env: CloudflareEnv): Promise<Response> {
+    // 環境に応じたPino Loggerを作成
+    const logger = createEnvironmentLogger(
+      env.NODE_ENV || 'production',
+      env.ANALYTICS
+    );
+    
+    // リクエストコンテキスト付きChild Logger
+    const requestLogger = PinoContextManager.createRequestLogger(logger, request, { env });
+    
+    // ...
+  }
+};
 ```
 
 ## 7. 監視・運用
@@ -833,27 +1340,37 @@ private isSensitiveField(fieldName: string): boolean {
 ## 11. 利点・期待効果
 
 ### 11.1 開発体験向上
-- ✅ **统一されたログ形式**: すべてのレイヤーで一貫したログ
-- ✅ **TraceID横断追跡**: エラー発生時の根本原因特定が容易
+- ✅ **標準化されたログライブラリ**: Pinoの豊富なAPIとドキュメント
+- ✅ **TypeScriptファースト**: 型安全性とIntelliSenseサポート
+- ✅ **Child Logger**: コンテキスト継承で汎用性向上
+- ✅ **TraceID横断追跡**: CF-Rayとのシームレス統合
 - ✅ **自動化**: Decorator/Wrapperによる自動ログ出力
 
 ### 11.2 運用効率化
-- ✅ **Cloudflare統合**: Dashboard直接確認、Request Tracing活用
-- ✅ **リアルタイム監視**: Analytics Engineでの即座な集計・分析
-- ✅ **アラート連携**: 異常検知の自動化
+- ✅ **Cloudflare統合**: Analytics Engineとのネイティブ連携
+- ✅ **構造化ログ**: JSON形式での機械処理対応
+- ✅ **リアルタイム監視**: Dashboardでの即座な可視化
+- ✅ **アラート連携**: レベル別異常検知の自動化
 
 ### 11.3 パフォーマンス向上
-- ✅ **Workers最適化**: バッチ処理、CPU時間制限対応
-- ✅ **効率的な出力**: 重要度に応じた出力制御
-- ✅ **メモリ効率**: バッファ管理によるメモリ使用量削減
+- ✅ **高性能**: Pinoは最速クラスのNode.jsログライブラリ
+- ✅ **Workers最適化**: BrowserモードでEdge Runtime対応
+- ✅ **メモリ効率**: バッチ処理とスマートバッファリング
+- ✅ **CPU最適化**: 非同期処理とタイムアウト保護
+
+### 11.4 エコシステムの利点
+- ✅ **コミュニティサポート**: 大きなコミュニティと豊富なツール
+- ✅ **プラグイン連携**: pino-pretty, transport系統の活用
+- ✅ **ベストプラクティス**: 業界標準のログパターン
+- ✅ **将来性**: 継続的なアップデートと機能強化
 
 ---
 
-**作成日**: 2025-06-29  
-**バージョン**: 1.0  
-**ステータス**: 設計完了・実装準備完了  
-**対象環境**: Cloudflare Workers + React Router v7 + DDD Architecture  
-**次のステップ**: Phase 1実装開始
+**作成日**: 2025-06-30  
+**バージョン**: 2.0 (Pino統合版)  
+**ステータス**: Pino移行設計完了・実装準備完了  
+**対象環境**: Cloudflare Workers + React Router v7 + Pino + DDD Architecture  
+**次のステップ**: Pino Phase 1実装開始
 
 ## 関連ドキュメント
 - `blog-design-document.md` - モダンCMS設計書

@@ -1,8 +1,8 @@
-# 監視・メトリクス戦略
+# Monitoring & Metrics Strategy
 
-## 1. 監視アーキテクチャ概要
+## 1. Monitoring Architecture Overview
 
-### 1.1 監視レイヤー構成
+### 1.1 Monitoring Layer Structure
 ```
 ┌─────────────────────────────────────┐
 │        User Experience             │
@@ -25,7 +25,7 @@
 └─────────────────────────────────────┘
 ```
 
-### 1.2 メトリクス分類
+### 1.2 Metrics Classification
 | カテゴリ | 指標 | 監視ツール | アラート |
 |----------|------|------------|----------|
 | **可用性** | Uptime, Health Check | UptimeRobot, Pingdom | 即座 |
@@ -34,9 +34,9 @@
 | **ビジネス** | Content Creation, User Activity | Analytics Engine | 日次 |
 | **リソース** | CPU, Memory, D1/R2 Usage | Cloudflare Dashboard | 閾値超過時 |
 
-## 2. Cloudflare Analytics活用
+## 2. Cloudflare Analytics Utilization
 
-### 2.1 Workers Analytics設定
+### 2.1 Workers Analytics Configuration
 ```typescript
 // workers/app.ts - Analytics Event送信
 export default {
@@ -80,7 +80,7 @@ export default {
 };
 ```
 
-### 2.3 Analytics Engine クエリ例
+### 2.3 Analytics Engine Query Examples
 ```sql
 -- パフォーマンス分析
 SELECT 
@@ -138,9 +138,9 @@ ORDER BY date DESC, created_count DESC;
         data-cf-beacon='{"token": "your-analytics-token"}'></script>
 ```
 
-## 5. ダッシュボード設計
+## 5. Dashboard Design
 
-### 5.1 Cloudflare Dashboard活用
+### 5.1 Cloudflare Dashboard Utilization
 ```
 Cloudflare Dashboard 監視項目:
 ├── Workers Analytics
@@ -162,9 +162,9 @@ Cloudflare Dashboard 監視項目:
     └── Rate Limiting
 ```
 
-## 7. ログ分析・監視
+## 7. Log Analysis & Monitoring
 
-### 7.1 構造化ログ分析
+### 7.1 Structured Log Analysis
 ```typescript
 // ログ分析クエリ
 const LOG_ANALYSIS_QUERIES = {
@@ -211,15 +211,15 @@ const LOG_ANALYSIS_QUERIES = {
 };
 ```
 
-## 12. 関連ドキュメント
+## 12. Related Documents
 
-- [deployment.md](deployment.md) - デプロイ戦略
-- [../architecture/infrastructure.md](../architecture/infrastructure.md) - インフラ設計
-- [../implementation/logging-strategy.md](../implementation/logging-strategy.md) - ログ戦略詳細
+- [deployment.md](deployment.md) - Deployment Strategy
+- [../architecture/infrastructure.md](../architecture/infrastructure.md) - Infrastructure Design
+- [../implementation/logging-strategy.md](../implementation/logging-strategy.md) - Detailed Logging Strategy
 
 ---
 
-**作成日**: 2025-06-29  
-**バージョン**: 1.0  
-**ステータス**: 監視戦略完成  
-**対象**: 運用チーム・DevOps
+**Last Updated**: 2025-07-02
+**Version**: 2.0  
+**Status**: Monitoring Strategy Complete  
+**Target**: Operations Team & DevOps

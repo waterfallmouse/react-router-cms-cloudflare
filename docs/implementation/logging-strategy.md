@@ -1,27 +1,27 @@
-# CMS ログ戦略設計書 (Pino統合版)
+# CMS Logging Strategy Design (Pino Integration)
 
-## 1. 概要
+## 1. Overview
 
-### 1.1 設計目的
+### 1.1 Design Purpose
 Domain-Driven Design (DDD) アーキテクチャを採用したCloudflare Workers + React Router v7 CMS環境において、Pinoログライブラリを使用した統一的なログ管理とリクエスト横断でのトレース機能を実現する。
 
-### 1.2 設計原則
+### 1.2 Design Principles
 - **Pino標準化**: 高性能な構造化ログライブラリの活用
 - **CF-Ray統合**: CloudflareネイティブのトレーシングIDとPinoの連携
 - **DDD準拠**: 各レイヤーの責務に応じたログ設計
 - **Workers最適化**: Edge Runtime制約に対応したPino Browser設定
 - **TypeScript対応**: 型安全なログ実装
 
-### 1.3 対象範囲
+### 1.3 Target Scope
 | 優先度 | 対象 | 詳細 |
 |--------|------|------|
 | **1. 管理画面** | `/admin/*` | コンテンツ管理、認証・認可ログ |
 | **2. 公開サイト** | `/`, `/posts/*` | アクセスログ、パフォーマンスログ |
 | **3. API** | `/api/*` | 業務ログ、エラーログ |
 
-## 2. PinoセットアップとTraceID管理
+## 2. Pino Setup and TraceID Management
 
-### 2.1 Pinoインストールと基本設定
+### 2.1 Pino Installation and Basic Configuration
 
 ```bash
 # 依存ライブラリのインストール
@@ -29,7 +29,7 @@ bun add pino
 bun add -D @types/pino
 ```
 
-### 2.2 Cloudflare Workers用Pino設定
+### 2.2 Pino Configuration for Cloudflare Workers
 
 ```typescript
 // src/infrastructure/logging/PinoLogger.ts
@@ -109,7 +109,7 @@ function flattenObject(obj: any, prefix = ''): Record<string, any> {
 }
 ```
 
-### 2.3 Pino Child LoggerでのContext伝播
+### 2.3 Context Propagation with Pino Child Logger
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -135,7 +135,7 @@ function flattenObject(obj: any, prefix = ''): Record<string, any> {
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 2.4 Pino Context Manager実装
+### 2.4 Pino Context Manager Implementation
 
 ```typescript
 // src/infrastructure/logging/PinoContextManager.ts
@@ -204,9 +204,9 @@ export class PinoContextManager {
 }
 ```
 
-## 3. Pinoログレベルと構造化ログ
+## 3. Pino Log Levels and Structured Logging
 
-### 3.1 Pino標準ログレベルの活用
+### 3.1 Utilizing Pino Standard Log Levels
 
 ```typescript
 // Pino標準レベルを使用
@@ -260,7 +260,7 @@ export function createBusinessLogger(baseLogger: pino.Logger): pino.Logger & Bus
 }
 ```
 
-### 3.2 Pino構造化ログフォーマット
+### 3.2 Pino Structured Log Format
 
 ```typescript
 // Pinoの標準構造を活用したログフォーマット
@@ -336,7 +336,7 @@ export interface LogEntryFields {
 type CmsLogger = pino.Logger<PinoLogContext>;
 ```
 
-### 3.3 Pinoログレベル使い分けガイド
+### 3.3 Pino Log Level Usage Guide
 
 | Pinoレベル | 使用場面 | 例 | 環境 | メソッド |
 |------------|----------|-----|------|----------|
@@ -347,14 +347,14 @@ type CmsLogger = pino.Logger<PinoLogContext>;
 | **error(50)** | 処理失敗 | バリデーションエラー、DB接続失敗 | All | `logger.error()` |
 | **fatal(60)** | 致命的エラー | システム停止レベル | All | `logger.fatal()` |
 
-#### 業務固有メソッド
+#### Business-Specific Methods
 | メソッド | 使用場面 | 例 | 内部レベル |
 |--------|----------|-----|------------|
 | **business()** | 業務操作 | コンテンツ作成、公開、削除 | info(30) |
 | **security()** | セキュリティ関連 | ログイン試行、認証失敗 | warn(40) |
 | **audit()** | 監査要求 | 重要データの変更履歴 | info(30) |
 
-#### 使用例
+#### Usage Examples
 ```typescript
 // 基本ログ
 logger.info('Request started');
@@ -370,7 +370,7 @@ logger.security('auth_failure', { userId, reason: 'invalid_password' });
 logger.audit('update', 'content', { before: oldData, after: newData });
 ```
 
-## 4. DDD各レイヤーでのPino実装
+## 4. Pino Implementation in DDD Layers
 
 ### 4.1 Presentation Layer（React Router v7）
 
@@ -1366,16 +1366,16 @@ private isSensitiveField(fieldName: string): boolean {
 
 ---
 
-**作成日**: 2025-06-30  
-**バージョン**: 2.0 (Pino統合版)  
-**ステータス**: Pino移行設計完了・実装準備完了  
-**対象環境**: Cloudflare Workers + React Router v7 + Pino + DDD Architecture  
-**次のステップ**: Pino Phase 1実装開始
+**Last Updated**: 2025-07-02
+**Version**: 2.0  
+**Status**: Pino Migration Design Complete & Implementation Ready  
+**Target Environment**: Cloudflare Workers + React Router v7 + Pino + DDD Architecture  
+**Next Steps**: Pino Phase 1 Implementation Start
 
-## 関連ドキュメント
-- `blog-design-document.md` - モダンCMS設計書
-- `ddd-domain-design.md` - CMSドメインモデル詳細設計
-- `application-service-design.md` - CMSアプリケーションサービス層設計
-- `test-strategy-design.md` - DORAテスト戦略
-- `di-strategy-design.md` - CMS Dependency Injection戦略設計書
-- `CLAUDE.md` - プロジェクト実装ガイド
+## Related Documents
+- `overview.md` - Modern CMS Design
+- `domain-design.md` - CMS Domain Model Detailed Design
+- `application-layer.md` - CMS Application Service Layer Design
+- `testing-strategy.md` - DORA Testing Strategy
+- `dependency-injection.md` - CMS Dependency Injection Strategy Design
+- `../CLAUDE.md` - Project Implementation Guide

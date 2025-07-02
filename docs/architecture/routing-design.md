@@ -900,17 +900,16 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 - [ ] Form submission tests
 - [ ] Error boundary tests
 
-## 10. 関連ドキュメント
+## 10. Related Documents
 
-- [React Router v7 Middleware実装パターン](react-router-middleware-patterns.md)
-- [認証・セキュリティアーキテクチャ](authentication-security.md)
-- [ドメイン設計](domain-design.md)
-- [開発実装ガイド](../implementation/development-guide.md)
+- [React Router v7 Middleware Implementation Patterns](../implementation/react-router-middleware-patterns.md)
+- [Authentication & Security Architecture](authentication-security.md)
+- [Domain Design](domain-design.md)
+- [Development Implementation Guide](../implementation/development-guide.md)
 
 ---
 
-**作成日**: 2025-07-02  
-**最終更新**: 2025-07-02  
-**バージョン**: 2.0  
-**ステータス**: @react-router/fs-routes対応済み  
+**Last Updated**: 2025-07-02
+**Version**: 2.0  
+**Status**: @react-router/fs-routes Compatible  
 **React Router**: v7 + @react-router/fs-routes対応

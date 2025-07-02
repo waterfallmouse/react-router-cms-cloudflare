@@ -1,30 +1,50 @@
-# RBAC（Role-Based Access Control）ドメインモデル設計
+# RBAC (Role-Based Access Control) Domain Model Design
 
-## 1. RBAC概要
+## 1. RBAC Overview
 
-### 1.1 RBACとは
+### 1.1 What is RBAC
 
-**Role-Based Access Control (RBAC)** は、ユーザーに役割（Role）を割り当て、その役割に基づいてリソースへのアクセスを制御するセキュリティモデルです。
+**Role-Based Access Control (RBAC)** is a security model that assigns roles to users and controls access to resources based on those roles.
 
 ```
 User → Role → Permission → Resource
  ↑      ↑        ↑         ↑
-ユーザー 役割    権限     リソース
+ User   Role    Permission Resource
 
-例:
+Example:
 editor → Editor Role → content:create → /admin/content/new
 ```
 
-### 1.2 RBAC要素
+### 1.2 RBAC Elements
 
-- **User（ユーザー）**: システムにアクセスする主体
-- **Role（役割）**: 権限の集合体
-- **Permission（権限）**: 特定のリソース・操作への許可
-- **Resource（リソース）**: 保護される対象（コンテンツ、メディア等）
+- **User**: The entity that accesses the system
+- **Role**: A collection of permissions
+- **Permission**: Authorization for specific resources and operations
+- **Resource**: Protected targets (content, media, etc.)
 
-## 2. ドメインモデル設計
+## 2. Domain Model Design
 
-### 2.1 基本エンティティ構造
+### 2.1 Introduction of Auth Context
+
+認証と認可の責務を分離するため、`Auth`コンテキストを導入します。このコンテキストは、ユーザーの認証情報と認可（RBAC）モデルを管理します。
+
+- **Accountエンティティ**: 認証情報（メールアドレス、パスワードハッシュ、OAuth連携情報など）を管理します。認証方法の追加・変更は、このエンティティに影響が閉じられます。
+- **Userエンティティ**: `Account`と1対1で関連付けられ、システム内での役割（Role）や状態（Status）など、認可に関する情報を管理します。
+
+```
+Auth Context
+├── Account Aggregate (認証)
+│   ├── AccountId
+│   ├── EmailAddress
+│   └── AuthenticationMethod (Value Object)
+└── User Aggregate (認可)
+    ├── UserId
+    ├── AccountId (関連)
+    ├── UserName
+    └── UserRole (Entity)
+```
+
+### 2.2 Basic Entity Structure
 
 ```
 User Entity (集約ルート)
@@ -47,7 +67,7 @@ Permission (値オブジェクト)
 └── Scope (オプション)
 ```
 
-## 3. 値オブジェクト実装
+## 3. Value Object Implementation
 
 ### 3.1 UserId
 
@@ -267,7 +287,7 @@ export class Permission {
 }
 ```
 
-### 3.5 RoleName と RoleHierarchy
+### 3.5 RoleName and RoleHierarchy
 
 ```typescript
 // src/domain/auth/valueObjects/RoleName.ts
@@ -405,7 +425,7 @@ export class UserStatus {
 }
 ```
 
-## 4. エンティティ実装
+## 4. Entity Implementation
 
 ### 4.1 UserRole Entity
 
@@ -694,7 +714,7 @@ export class UserRole {
 }
 ```
 
-### 4.2 User Entity (集約ルート)
+### 4.2 User Entity (Aggregate Root)
 
 ```typescript
 // src/domain/auth/entities/User.ts
@@ -919,7 +939,7 @@ export class User {
 }
 ```
 
-## 5. ドメインサービス
+## 5. Domain Services
 
 ### 5.1 RoleManagementService
 
@@ -1139,9 +1159,9 @@ interface AuthorizationResult {
 }
 ```
 
-## 6. イベント
+## 6. Events
 
-### 6.1 ユーザー関連イベント
+### 6.1 User-Related Events
 
 ```typescript
 // src/domain/auth/events/UserRoleChangedEvent.ts
@@ -1202,7 +1222,7 @@ export class RolePermissionsChangedEvent implements DomainEvent {
 }
 ```
 
-## 7. Repository インターフェース
+## 7. Repository Interfaces
 
 ### 7.1 UserRepository
 
@@ -1274,9 +1294,9 @@ export interface UserRoleRepositoryInterface {
 }
 ```
 
-## 8. 使用例
+## 8. Usage Examples
 
-### 8.1 基本的な権限チェック
+### 8.1 Basic Permission Check
 
 ```typescript
 // app/routes/admin.content.new.tsx
@@ -1294,7 +1314,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 ```
 
-### 8.2 動的権限チェック
+### 8.2 Dynamic Permission Check
 
 ```typescript
 // app/routes/admin.users.$userId.role.tsx
@@ -1339,16 +1359,16 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
 }
 ```
 
-## 9. 関連ドキュメント
+## 9. Related Documents
 
-- [authentication-security.md](authentication-security.md) - 認証・セキュリティアーキテクチャ
-- [zero-trust-security.md](../implementation/zero-trust-security.md) - ゼロトラストセキュリティ実装戦略
-- [domain-design.md](domain-design.md) - ドメインモデル設計
-- [react-router-middleware-patterns.md](../implementation/react-router-middleware-patterns.md) - React Router Middleware実装パターン
+- [authentication-security.md](authentication-security.md) - Authentication & Security Architecture
+- [../implementation/zero-trust-security.md](../implementation/zero-trust-security.md) - Zero Trust Security Implementation Strategy
+- [domain-design.md](domain-design.md) - Domain Model Design
+- [../implementation/react-router-middleware-patterns.md](../implementation/react-router-middleware-patterns.md) - React Router Middleware Implementation Patterns
 
 ---
 
-**作成日**: 2025-07-01  
-**バージョン**: 1.0  
-**ステータス**: ドメインモデル設計完成  
-**準拠**: RBAC標準・DDD原則
+**Last Updated**: 2025-07-02
+**Version**: 2.0  
+**Status**: Domain Model Design Complete  
+**Compliance**: RBAC Standards & DDD Principles

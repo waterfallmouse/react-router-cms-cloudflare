@@ -1,63 +1,63 @@
-# 認証・セキュリティアーキテクチャ設計
+# Authentication & Security Architecture Design
 
-## 1. アーキテクチャ概要
+## 1. Architecture Overview
 
-### 1.1 ゼロトラストセキュリティモデル
+### 1.1 Zero Trust Security Model
 
-本CMSは**ゼロトラストセキュリティ**を前提とした多層防御アーキテクチャを採用します。
+This CMS adopts a multi-layered defense architecture based on **Zero Trust Security**.
 
 ```
 ┌─────────────────────────────────────┐
-│        Cloudflare Access           │ ← Layer 1: エッジレベル認証
+│        Cloudflare Access           │ ← Layer 1: Edge-level Authentication
 │        (Zero Trust Gateway)        │   Identity Verification
 └─────────────────────────────────────┘   Device Trust
                    │
 ┌─────────────────────────────────────┐
-│     React Router Middleware        │ ← Layer 2: アプリケーション認証
+│     React Router Middleware        │ ← Layer 2: Application Authentication
 │     (JWT Verification & RBAC)      │   Network Segmentation
 └─────────────────────────────────────┘   Authorization
                    │
 ┌─────────────────────────────────────┐
-│       Domain Authorization         │ ← Layer 3: ドメインレベル認可
+│       Domain Authorization         │ ← Layer 3: Domain-level Authorization
 │       (Business Rules)             │   Least Privilege
 └─────────────────────────────────────┘
 ```
 
-### 1.2 認証フロー全体像
+### 1.2 Overall Authentication Flow
 
 ```mermaid
 sequenceDiagram
-    participant User as ユーザー
+    participant User
     participant CF as Cloudflare Access
     participant MW as React Router MW
-    participant App as CMSアプリ
-    participant Domain as ドメイン層
+    participant App as CMS App
+    participant Domain
 
-    User->>CF: 1. /admin/* アクセス
+    User->>CF: 1. Access /admin/*
     CF->>CF: 2. Identity Verification
-    CF->>User: 3. OAuth認証要求
-    User->>CF: 4. 認証完了
-    CF->>MW: 5. JWT付きリクエスト
-    MW->>MW: 6. JWT検証
-    MW->>MW: 7. RBAC確認
-    MW->>App: 8. 認証済みリクエスト
-    App->>Domain: 9. ビジネスロジック実行
-    Domain->>App: 10. 結果返却
-    App->>User: 11. レスポンス
+    CF->>User: 3. Request OAuth Authentication
+    User->>CF: 4. Authentication Complete
+    CF->>MW: 5. Request with JWT
+    MW->>MW: 6. Verify JWT
+    MW->>MW: 7. Check RBAC
+    MW->>App: 8. Authenticated Request
+    App->>Domain: 9. Execute Business Logic
+    Domain->>App: 10. Return Result
+    App->>User: 11. Response
 ```
 
-## 2. Layer 1: Cloudflare Access（エッジレベル認証）
+## 2. Layer 1: Cloudflare Access (Edge-level Authentication)
 
-### 2.1 Identity Verification（身元確認）
+### 2.1 Identity Verification
 
-**設定方針**:
-- 管理画面 (`/admin/*`) への全アクセスをCloudflare Accessで保護
-- 複数の認証プロバイダーサポート
-- セッション管理と自動タイムアウト
+**Configuration Policy**:
+- Protect all access to the admin panel (`/admin/*`) with Cloudflare Access.
+- Support multiple identity providers.
+- Session management and automatic timeouts.
 
-**Cloudflare Access設定例**:
+**Cloudflare Access Configuration Example**:
 ```yaml
-# Cloudflare Dashboard設定
+# Cloudflare Dashboard Configuration
 applications:
   - name: "CMS Admin Panel"
     domain: "your-cms.workers.dev"
@@ -69,12 +69,12 @@ applications:
       - name: "CMS Administrators"
         decision: "allow"
         rules:
-          # 承認されたメールアドレス
+          # Approved email addresses
           - email: 
               - "admin@company.com"
               - "editor@company.com"
           
-          # Google Workspace ドメイン
+          # Google Workspace domain
           - gsuite:
               identity_provider_id: "your-google-workspace-id"
               email_domain: "company.com"
@@ -88,7 +88,7 @@ applications:
         decision: "allow"
         rules:
           - geo:
-              countries: ["JP", "US"] # 日本・アメリカからのみ
+              countries: ["JP", "US"] # From Japan and US only
       
       - name: "Time-based Access"
         decision: "allow"  
@@ -101,17 +101,17 @@ applications:
                 end: "18:00"
 ```
 
-### 2.2 Device Trust（デバイス信頼性）
+### 2.2 Device Trust
 
-**段階的デバイス認証**:
+**Phased Device Authentication**:
 
 ```typescript
 // Device Trust Levels
 export enum DeviceTrustLevel {
-  BASIC = 1,    // User-Agent、IP制限
-  STANDARD = 2, // + クライアント証明書
-  STRICT = 3,   // + デバイス登録、WARP必須
-  PARANOID = 4  // + コンプライアンスチェック
+  BASIC = 1,    // User-Agent, IP restriction
+  STANDARD = 2, // + Client certificate
+  STRICT = 3,   // + Device registration, WARP required
+  PARANOID = 4  // + Compliance check
 }
 
 export interface DeviceTrustPolicy {
@@ -123,7 +123,7 @@ export interface DeviceTrustPolicy {
 }
 ```
 
-**実装例**:
+**Implementation Example**:
 ```typescript
 // src/infrastructure/security/DeviceTrustVerifier.ts
 export class CloudflareDeviceTrustVerifier {
@@ -166,11 +166,11 @@ export class CloudflareDeviceTrustVerifier {
 }
 ```
 
-## 3. Layer 2: React Router Middleware（アプリケーション認証）
+## 3. Layer 2: React Router Middleware (Application Authentication)
 
 ### 3.1 Middleware Architecture
 
-**React Router v7 Middleware活用**:
+**Leveraging React Router v7 Middleware**:
 ```typescript
 // app/middleware/authentication.ts
 import type { MiddlewareFunction } from "@react-router/dev";
@@ -178,26 +178,26 @@ import type { MiddlewareFunction } from "@react-router/dev";
 export const authenticationMiddleware: MiddlewareFunction = async (request, context) => {
   const url = new URL(request.url);
   
-  // 公開パスは認証スキップ
+  // Skip authentication for public paths
   if (isPublicPath(url.pathname)) {
     return null;
   }
   
   try {
-    // 1. Cloudflare Access JWT検証
+    // 1. Verify Cloudflare Access JWT
     const accessJWT = await verifyCloudflareAccessJWT(request);
     
-    // 2. Device Trust検証
+    // 2. Verify Device Trust
     await verifyDeviceTrust(request);
     
-    // 3. ユーザー情報取得・設定
+    // 3. Get and set user information
     const user = await loadUserFromJWT(accessJWT);
     context.user = user;
     
     return null; // Continue to route
     
   } catch (error) {
-    // 認証失敗時の処理
+    // Handle authentication failure
     if (error instanceof AuthenticationError) {
       return redirect('/admin/login');
     }
@@ -206,7 +206,7 @@ export const authenticationMiddleware: MiddlewareFunction = async (request, cont
 };
 ```
 
-### 3.2 JWT検証実装
+### 3.2 JWT Verification Implementation
 
 ```typescript
 // src/infrastructure/auth/CloudflareAccessJWTVerifier.ts
@@ -223,13 +223,13 @@ export class CloudflareAccessJWTVerifier {
     }
 
     try {
-      // Cloudflare Access公開鍵で検証
+      // Verify with Cloudflare Access public key
       const jwksUrl = `https://${this.accessDomain}/cdn-cgi/access/certs`;
       const publicKey = await this.getPublicKey(jwksUrl);
       
       const payload = await this.verifySignature(jwt, publicKey);
       
-      // ペイロード検証
+      // Validate payload
       this.validatePayload(payload);
       
       return payload;
@@ -246,17 +246,17 @@ export class CloudflareAccessJWTVerifier {
   private validatePayload(payload: any): void {
     const now = Math.floor(Date.now() / 1000);
     
-    // 有効期限チェック
+    // Check expiration
     if (payload.exp < now) {
       throw new AuthenticationError('JWT expired');
     }
     
-    // Audience チェック
+    // Check audience
     if (payload.aud !== this.accessClientId) {
       throw new AuthenticationError('Invalid audience');
     }
     
-    // 必須フィールドチェック
+    // Check required fields
     if (!payload.email || !payload.sub) {
       throw new AuthenticationError('Missing required claims');
     }
@@ -274,7 +274,7 @@ export interface AccessJWTPayload {
 }
 ```
 
-### 3.3 Network Segmentation（ネットワーク分離）
+### 3.3 Network Segmentation
 
 ```typescript
 // src/infrastructure/security/NetworkPolicyEnforcer.ts
@@ -310,22 +310,22 @@ export class NetworkPolicyEnforcer {
     const clientIP = request.headers.get('cf-connecting-ip');
     const country = request.headers.get('cf-ipcountry');
     
-    // IP制限チェック
+    // Check IP restriction
     if (policy.allowedIPs && !this.isIPAllowed(clientIP, policy.allowedIPs)) {
       throw new NetworkPolicyError('IP address not allowed');
     }
     
-    // 地域制限チェック
+    // Check geographic restriction
     if (policy.allowedCountries && !policy.allowedCountries.includes(country)) {
       throw new NetworkPolicyError('Geographic access denied');
     }
     
-    // mTLS要求チェック
+    // Check mTLS requirement
     if (policy.requireMTLS && !request.headers.get('cf-client-cert')) {
       throw new NetworkPolicyError('Client certificate required');
     }
     
-    // レート制限チェック
+    // Check rate limit
     await this.enforceRateLimit(clientIP, url.pathname, policy.maxRequestRate);
   }
 }
@@ -339,252 +339,41 @@ interface NetworkPolicy {
 }
 ```
 
-## 4. Layer 3: Domain Authorization（ドメインレベル認可）
+## 4. Layer 3: Domain Authorization
 
-### 4.1 RBAC (Role-Based Access Control) モデル
+### 4.1 RBAC (Role-Based Access Control) Model
 
-```typescript
-// src/domain/auth/entities/User.ts
-export class User {
-  constructor(
-    private readonly id: UserId,
-    private readonly email: EmailAddress,
-    private readonly name: UserName,
-    private role: UserRole,
-    private readonly createdAt: Date = new Date(),
-    private updatedAt: Date = new Date()
-  ) {}
+The application's domain layer implements detailed authorization control based on the RBAC model.
 
-  hasPermission(permission: Permission): boolean {
-    return this.role.hasPermission(permission);
-  }
+Access to specific operations (such as creating content, publishing, user management, etc.) is granted or denied based on the user's Role and Permissions.
 
-  hasAnyPermission(permissions: Permission[]): boolean {
-    return permissions.some(p => this.hasPermission(p));
-  }
+For details on this domain model, please refer to the following document:
 
-  canAccessResource(resource: string, action: string): boolean {
-    const permission = Permission.fromResource(resource, action);
-    return this.hasPermission(permission);
-  }
-
-  changeRole(newRole: UserRole): void {
-    this.role = newRole;
-    this.updatedAt = new Date();
-  }
-}
-
-// src/domain/auth/valueObjects/Permission.ts
-export class Permission {
-  constructor(
-    private readonly resource: string,  // 'content', 'media', 'user', 'system'
-    private readonly action: string     // 'read', 'create', 'update', 'delete', 'publish'
-  ) {}
-
-  static fromString(permission: string): Permission {
-    const [resource, action] = permission.split(':');
-    return new Permission(resource, action);
-  }
-
-  static fromResource(resource: string, action: string): Permission {
-    return new Permission(resource, action);
-  }
-
-  toString(): string {
-    return `${this.resource}:${this.action}`;
-  }
-
-  equals(other: Permission): boolean {
-    return this.resource === other.resource && this.action === other.action;
-  }
-
-  // 定義済み権限
-  static readonly CONTENT_READ = new Permission('content', 'read');
-  static readonly CONTENT_CREATE = new Permission('content', 'create');
-  static readonly CONTENT_UPDATE = new Permission('content', 'update');
-  static readonly CONTENT_DELETE = new Permission('content', 'delete');
-  static readonly CONTENT_PUBLISH = new Permission('content', 'publish');
-  
-  static readonly MEDIA_READ = new Permission('media', 'read');
-  static readonly MEDIA_UPLOAD = new Permission('media', 'upload');
-  static readonly MEDIA_DELETE = new Permission('media', 'delete');
-  
-  static readonly USER_READ = new Permission('user', 'read');
-  static readonly USER_CREATE = new Permission('user', 'create');
-  static readonly USER_UPDATE = new Permission('user', 'update');
-  static readonly USER_DELETE = new Permission('user', 'delete');
-  
-  static readonly SYSTEM_CONFIG = new Permission('system', 'config');
-  static readonly SYSTEM_BACKUP = new Permission('system', 'backup');
-  static readonly SYSTEM_LOGS = new Permission('system', 'logs');
-  static readonly SYSTEM_MONITOR = new Permission('system', 'monitor');
-}
-
-// src/domain/auth/entities/UserRole.ts
-export class UserRole {
-  constructor(
-    private readonly name: RoleName,
-    private readonly permissions: Permission[],
-    private readonly description?: string
-  ) {}
-
-  hasPermission(permission: Permission): boolean {
-    return this.permissions.some(p => p.equals(permission));
-  }
-
-  getPermissions(): Permission[] {
-    return [...this.permissions];
-  }
-
-  getName(): string {
-    return this.name.getValue();
-  }
-
-  // 標準ロール定義
-  static readonly VIEWER = new UserRole(
-    RoleName.fromString('viewer'),
-    [
-      Permission.CONTENT_READ,
-      Permission.MEDIA_READ,
-    ],
-    '閲覧のみ可能'
-  );
-
-  static readonly EDITOR = new UserRole(
-    RoleName.fromString('editor'),
-    [
-      Permission.CONTENT_READ,
-      Permission.CONTENT_CREATE,
-      Permission.CONTENT_UPDATE,
-      Permission.MEDIA_READ,
-      Permission.MEDIA_UPLOAD,
-    ],
-    'コンテンツの作成・編集が可能'
-  );
-
-  static readonly PUBLISHER = new UserRole(
-    RoleName.fromString('publisher'),
-    [
-      ...UserRole.EDITOR.getPermissions(),
-      Permission.CONTENT_PUBLISH,
-      Permission.CONTENT_DELETE,
-      Permission.MEDIA_DELETE,
-    ],
-    'コンテンツの公開・削除が可能'
-  );
-
-  static readonly ADMIN = new UserRole(
-    RoleName.fromString('admin'),
-    [
-      ...UserRole.PUBLISHER.getPermissions(),
-      Permission.USER_READ,
-      Permission.USER_CREATE,
-      Permission.USER_UPDATE,
-      Permission.SYSTEM_CONFIG,
-      Permission.SYSTEM_MONITOR,
-    ],
-    'ユーザー管理とシステム設定が可能'
-  );
-
-  static readonly SUPER_ADMIN = new UserRole(
-    RoleName.fromString('super_admin'),
-    [
-      ...UserRole.ADMIN.getPermissions(),
-      Permission.USER_DELETE,
-      Permission.SYSTEM_BACKUP,
-      Permission.SYSTEM_LOGS,
-    ],
-    '全ての操作が可能'
-  );
-}
-```
+- **[RBAC Domain Model Design](rbac-domain-model.md)**
 
 ### 4.2 Authorization Middleware
 
+We use React Router's Middleware to enforce authorization checks at the route level. This ensures that only users with specific permissions can execute the corresponding route handlers (`loader` or `action`).
+
 ```typescript
 // app/middleware/authorization.ts
-export function requirePermission(permission: Permission) {
-  return async function authorizationMiddleware(request: Request, context: any) {
-    const user = context.user as User;
-    
-    if (!user) {
-      throw new AuthenticationError('User not authenticated');
-    }
-    
-    if (!user.hasPermission(permission)) {
-      throw new AuthorizationError(
-        `Permission denied: ${permission.toString()}`
-      );
-    }
-    
-    return null; // Continue to route
-  };
-}
-
-export function requireAnyPermission(permissions: Permission[]) {
-  return async function authorizationMiddleware(request: Request, context: any) {
-    const user = context.user as User;
-    
-    if (!user) {
-      throw new AuthenticationError('User not authenticated');
-    }
-    
-    if (!user.hasAnyPermission(permissions)) {
-      throw new AuthorizationError(
-        `One of these permissions required: ${permissions.map(p => p.toString()).join(', ')}`
-      );
-    }
-    
-    return null;
-  };
-}
-
-export function requireRole(roleName: string) {
-  return async function roleAuthorizationMiddleware(request: Request, context: any) {
-    const user = context.user as User;
-    
-    if (!user) {
-      throw new AuthenticationError('User not authenticated');
-    }
-    
-    if (user.getRole().getName() !== roleName) {
-      throw new AuthorizationError(`Role '${roleName}' required`);
-    }
-    
-    return null;
-  };
-}
-```
-
-### 4.3 Route-Level Authorization
-
-```typescript
-// app/routes/admin.content.new.tsx
-import { requirePermission } from '~/middleware/authorization';
+import { requirePermission, requireRole } from '~/middleware/authorization';
 import { Permission } from '~/domain/auth/valueObjects/Permission';
 
-export const middleware = [
+// Middleware to require a specific permission
+export const middlewareForCreateContent = [
   requirePermission(Permission.CONTENT_CREATE)
 ];
 
-export async function action({ request }: ActionFunctionArgs) {
-  // この時点で既にCONTENT_CREATE権限が確認済み
-  const formData = await request.formData();
-  // コンテンツ作成処理...
-}
-
-// app/routes/admin.users.new.tsx
-export const middleware = [
-  requireRole('admin') // admin またはsuper_admin のみ
-];
-
-// app/routes/admin.system.backup.tsx
-export const middleware = [
-  requirePermission(Permission.SYSTEM_BACKUP)
+// Middleware to require a specific role
+export const middlewareForUserManagement = [
+  requireRole('admin')
 ];
 ```
 
-## 5. セキュリティ設定・運用
+For detailed implementation patterns, please refer to [React Router Middleware Implementation Patterns](../implementation/react-router-middleware-patterns.md).
+
+## 5. Security Settings & Operations
 
 ### 5.1 Security Headers
 
@@ -628,7 +417,7 @@ export function addSecurityHeaders(response: Response): Response {
 }
 ```
 
-### 5.2 監査ログ
+### 5.2 Audit Log
 
 ```typescript
 // src/infrastructure/logging/SecurityAuditLogger.ts
@@ -675,42 +464,42 @@ export class SecurityAuditLogger {
 }
 ```
 
-## 6. 実装ロードマップ
+## 6. Implementation Roadmap
 
-### Phase 1: 基本認証 (Week 1-2)
-- [ ] Cloudflare Access設定
-- [ ] React Router Middleware基本実装
-- [ ] JWT検証機能
-- [ ] 基本的なRBACモデル
+### Phase 1: Basic Authentication (Weeks 1-2)
+- [ ] Cloudflare Access configuration
+- [ ] Basic React Router Middleware implementation
+- [ ] JWT verification functionality
+- [ ] Basic RBAC model
 
-### Phase 2: セキュリティ強化 (Week 3-4)
-- [ ] Device Trust実装
+### Phase 2: Security Enhancement (Weeks 3-4)
+- [ ] Device Trust implementation
 - [ ] Network Policy Enforcement
-- [ ] 詳細なRBAC実装
-- [ ] セキュリティヘッダー設定
+- [ ] Detailed RBAC implementation
+- [ ] Security header configuration
 
-### Phase 3: 監視・監査 (Week 5-6)
-- [ ] セキュリティ監査ログ
-- [ ] 異常検知システム
-- [ ] アラート設定
-- [ ] レポート機能
+### Phase 3: Monitoring & Auditing (Weeks 5-6)
+- [ ] Security audit log
+- [ ] Anomaly detection system
+- [ ] Alert configuration
+- [ ] Reporting functionality
 
-### Phase 4: 高度なセキュリティ機能 (Week 7-8)
-- [ ] mTLS実装
-- [ ] 高度なDevice Trust
-- [ ] 動的リスク評価
-- [ ] ゼロトラスト完全実装
+### Phase 4: Advanced Security Features (Weeks 7-8)
+- [ ] mTLS implementation
+- [ ] Advanced Device Trust
+- [ ] Dynamic risk assessment
+- [ ] Full Zero Trust implementation
 
-## 7. 関連ドキュメント
+## 7. Related Documents
 
-- [overview.md](overview.md) - システム全体概要
-- [infrastructure.md](infrastructure.md) - Cloudflare Workers設定詳細
-- [domain-design.md](domain-design.md) - ドメインモデル設計
-- [../implementation/development-guide.md](../implementation/development-guide.md) - 開発実装ガイド
+- [overview.md](overview.md) - System Overview
+- [infrastructure.md](infrastructure.md) - Cloudflare Workers Configuration Details
+- [domain-design.md](domain-design.md) - Domain Model Design
+- [../implementation/development-guide.md](../implementation/development-guide.md) - Development Implementation Guide
 
 ---
 
-**作成日**: 2025-07-01  
-**バージョン**: 1.0  
-**ステータス**: 設計完了・実装準備中  
-**セキュリティレベル**: ゼロトラスト対応
+**Last Updated**: 2025-07-02
+**Version**: 2.0
+**Status**: Design complete, implementation ready
+**Security Level**: Zero Trust Compliant

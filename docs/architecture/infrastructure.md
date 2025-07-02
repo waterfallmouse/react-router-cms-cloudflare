@@ -462,7 +462,7 @@ export async function healthCheck(env: CloudflareEnv): Promise<Response> {
 }
 ```
 
-## 12. 関連ドキュメント
+## 12. Related Documents
 
 - [overview.md](overview.md) - システム全体概要
 - [domain-design.md](domain-design.md) - ドメインモデル設計
@@ -471,7 +471,7 @@ export async function healthCheck(env: CloudflareEnv): Promise<Response> {
 
 ---
 
-**作成日**: 2025-06-29  
-**バージョン**: 1.0  
-**ステータス**: 設計完了  
+**Last Updated**: 2025-07-02
+**Version**: 2.0  
+**Status**: Design Complete  
 **対象環境**: Cloudflare Workers + D1 + R2

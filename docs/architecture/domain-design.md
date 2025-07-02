@@ -1,30 +1,30 @@
-# CMS ドメインモデル設計
+# CMS Domain Model Design
 
-## 1. ドメイン分析
+## 1. Domain Analysis
 
-### 1.1 ユビキタス言語
-- **コンテンツ (Content)**: CMSの管理対象となる情報（記事、ページ、プロダクト等）
-- **コンテンツタイプ (ContentType)**: コンテンツの種類定義（ブログ記事、固定ページ等）
-- **スラッグ (Slug)**: URL用のコンテンツ識別子
-- **公開 (Publish)**: コンテンツを一般に公開する行為
-- **下書き (Draft)**: 未公開状態のコンテンツ
-- **アーカイブ (Archive)**: 非アクティブ状態のコンテンツ
-- **メディア (Media)**: コンテンツに関連するファイルリソース（画像、動画等）
-- **メタデータ (Metadata)**: コンテンツの付加情報
-- **スキーマ (Schema)**: コンテンツタイプの構造定義
+### 1.1 Ubiquitous Language
+- **Content**: Information managed by the CMS (articles, pages, products, etc.)
+- **ContentType**: Content type definitions (blog posts, static pages, etc.)
+- **Slug**: Content identifier for URLs
+- **Publish**: The act of making content publicly available
+- **Draft**: Unpublished content state
+- **Archive**: Inactive content state
+- **Media**: File resources related to content (images, videos, etc.)
+- **Metadata**: Additional information about content
+- **Schema**: Structure definition of content types
 
-### 1.2 ドメインの境界
+### 1.2 Domain Boundaries
 ```
-CMS Context (CMSコンテキスト)
-├── Content Aggregate (コンテンツ集約)
-├── ContentType Aggregate (コンテンツタイプ集約)
-├── Media Aggregate (メディア集約)
-├── Category Aggregate (分類集約) ※将来拡張
-├── User Aggregate (ユーザー集約) ※将来拡張
-└── Workflow Aggregate (ワークフロー集約) ※将来拡張
+CMS Context
+├── Content Aggregate
+├── ContentType Aggregate
+├── Media Aggregate
+├── Category Aggregate (Future Extension)
+├── User Aggregate (Future Extension)
+└── Workflow Aggregate (Future Extension)
 ```
 
-## 2. Zod Validation Schemas (Zodバリデーションスキーマ)
+## 2. Zod Validation Schemas
 
 ### 2.1 Domain Validation Schemas
 ```typescript
@@ -107,9 +107,9 @@ export const MediaMimeTypeSchema = z
   .regex(/^[a-z]+\/[a-z0-9\-\+\.]+$/i, 'Invalid MIME type format');
 ```
 
-## 3. Value Objects (値オブジェクト)
+## 3. Value Objects
 
-### 3.1 Value Object 統一パターン
+### 3.1 Value Object Unified Pattern
 
 すべてのValue Objectは以下の統一パターンに従います：
 
@@ -701,7 +701,7 @@ export class ContentTypeDisplayName {
 }
 ```
 
-## 4. Application DTOs (アプリケーションDTO)
+## 4. Application DTOs
 
 ### 4.1 Request DTOs with Zod Validation
 ```typescript
@@ -794,7 +794,7 @@ export interface ContentTypeResponse {
 }
 ```
 
-## 5. Entities (エンティティ)
+## 5. Entities
 
 ### 5.1 Content Entity
 ```typescript
@@ -1026,7 +1026,7 @@ export class Media {
 }
 ```
 
-### 5.3 ContentType Entity (Aggregate Root強化版)
+### 5.3 ContentType Entity (Enhanced Aggregate Root)
 ```typescript
 // domain/cms/entities/ContentType.ts
 export class ContentType {
@@ -1289,7 +1289,7 @@ export class ContentValidationError extends Error {
 }
 ```
 
-## 6. Domain Services (ドメインサービス)
+## 6. Domain Services
 
 ### 6.1 ContentDomainService
 ```typescript
@@ -1341,13 +1341,13 @@ export class MediaDomainService {
 }
 ```
 
-## 7. Repository Interfaces (リポジトリインターフェース)
+## 7. Repository Interfaces
 
-### 7.1 CQRS分離設計
+### 7.1 CQRS Separation Design
 
 Repository パターンを **Command/Query Responsibility Segregation (CQRS)** に従って分離し、責務を明確にします。
 
-#### Command Repository Interface (書き込み操作)
+#### Command Repository Interface (Write Operations)
 ```typescript
 // domain/cms/repositories/ContentRepositoryInterface.ts
 export interface ContentRepositoryInterface {
@@ -1361,7 +1361,7 @@ export interface ContentRepositoryInterface {
 }
 ```
 
-#### Query Service Interface (読み込み操作)
+#### Query Service Interface (Read Operations)
 ```typescript
 // domain/cms/services/ContentQueryServiceInterface.ts
 export interface ContentQueryServiceInterface {
@@ -1485,7 +1485,7 @@ export interface ContentTypeWithCount {
 }
 ```
 
-## 8. Domain Events (ドメインイベント)
+## 8. Domain Events
 
 ```typescript
 // domain/cms/events/ContentPublishedEvent.ts
@@ -1535,9 +1535,16 @@ export class ContentTypeCreatedEvent {
 
 ---
 
-## 関連ドキュメント
-- `blog-design-document.md` - モダンCMS設計書
-- `application-service-design.md` - CMSアプリケーションサービス層設計
-- `test-strategy-design.md` - DORAテスト戦略
-- `ddd-development-tickets.md` - CMS開発チケット分割
-- `biome-configuration.md` - Biome v2設定ガイド
+## Related Documents
+- [overview.md](overview.md) - Modern CMS Design
+- [application-layer.md](application-layer.md) - CMS Application Service Layer Design
+- [../implementation/testing-strategy.md](../implementation/testing-strategy.md) - DORA Testing Strategy
+- [../../development-tickets.md](../../development-tickets.md) - CMS Development Ticket Breakdown
+- [../../biome.json](../../biome.json) - Biome v2 Configuration Guide
+
+---
+
+**Last Updated**: 2025-07-02
+**Version**: 2.0  
+**Status**: Domain Model Design Complete  
+**対象**: アーキテクト・DDD実装者

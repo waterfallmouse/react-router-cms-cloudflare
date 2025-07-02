@@ -1,25 +1,25 @@
-# CMSアプリケーションサービス層設計書
+# CMS Application Service Layer Design
 
-## 1. Application Layer概要
+## 1. Application Layer Overview
 
-### 1.1 責務
-- ドメインロジックのオーケストレーション
-- トランザクション境界の管理
-- ドメインイベントの発行
-- 外部サービスとの連携
-- DTOとドメインオブジェクトの変換
+### 1.1 Responsibilities
+- Orchestration of domain logic
+- Management of transaction boundaries
+- Dispatching of domain events
+- Integration with external services
+- Conversion between DTOs and domain objects
 
-### 1.2 設計原則
-- **CQRS (Command Query Responsibility Segregation)**: 書き込み操作と読み込み操作の分離
-- **Single Responsibility**: 1つのUseCaseは1つの責務のみ
-- **Dependency Inversion**: インフラ層への依存をインターフェースで抽象化
-- **Testability**: ドメイン層とは独立してテスト可能
+### 1.2 Design Principles
+- **CQRS (Command Query Responsibility Segregation)**: Separation of write and read operations.
+- **Single Responsibility**: One UseCase has only one responsibility.
+- **Dependency Inversion**: Abstracting dependencies on the infrastructure layer through interfaces.
+- **Testability**: Can be tested independently of the domain layer.
 
-## 2. Use Case設計
+## 2. Use Case Design
 
-### 2.1 Command Use Cases (書き込み操作)
+### 2.1 Command Use Cases (Write Operations)
 
-#### CreateContentUseCase (ContentType主導版)
+#### CreateContentUseCase (ContentType-driven version)
 ```typescript
 // application/usecases/CreateContentUseCase.ts
 export class CreateContentUseCase {
@@ -32,17 +32,17 @@ export class CreateContentUseCase {
 
   async execute(request: CreateContentRequest): Promise<ContentResponse> {
     return await this.transactionManager.executeInTransaction(async () => {
-      // 1. リクエストバリデーション
+      // 1. Request validation
       const validatedRequest = CreateContentRequestSchema.parse(request);
 
-      // 2. ContentType取得（Aggregate Root）
+      // 2. Get ContentType (Aggregate Root)
       const contentTypeId = ContentTypeId.fromString(validatedRequest.contentTypeId);
       const contentType = await this.contentTypeRepository.findById(contentTypeId);
       if (!contentType) {
         throw new ContentTypeNotFoundError(validatedRequest.contentTypeId);
       }
 
-      // 3. ContentType主導でContent作成（スキーマ検証含む）
+      // 3. Create Content led by ContentType (including schema validation)
       const contentData: ContentCreationData = {
         title: validatedRequest.title,
         body: validatedRequest.body,
@@ -52,29 +52,29 @@ export class CreateContentUseCase {
 
       const content = contentType.createContent(contentData);
 
-      // 4. スラッグ重複チェック（Domain Service）
+      // 4. Slug duplication check (Domain Service)
       if (validatedRequest.slug) {
         await this.contentDomainService.ensureSlugUniqueness(content.getSlug());
       } else {
-        // カスタムスラッグが指定されていない場合、ユニークなスラッグを生成
+        // If a custom slug is not specified, generate a unique one
         const baseSlug = content.getTitle().generateSlug();
         const uniqueSlug = await this.contentDomainService.generateUniqueSlug(baseSlug);
         content.updateSlug(uniqueSlug);
       }
 
-      // 5. 永続化
+      // 5. Persistence
       await this.contentRepository.save(content);
 
-      // 6. 作成イベント発行
+      // 6. Dispatch creation event
       const event = new ContentCreatedEvent(
         content.getId(),
         content.getTitle(),
         content.getContentTypeId(),
         content.getCreatedAt()
       );
-      // イベント発行は別途実装
+      // Event dispatching will be implemented separately
 
-      // 7. レスポンスDTO変換
+      // 7. Convert to response DTO
       return this.toResponse(content, contentType);
     });
   }
@@ -113,7 +113,7 @@ export class PublishContentUseCase {
 
   async execute(contentId: string): Promise<ContentResponse> {
     return await this.transactionManager.executeInTransaction(async () => {
-      // 1. コンテンツ取得
+      // 1. Get content
       const id = ContentId.fromString(contentId);
       const content = await this.contentRepository.findById(id);
       
@@ -121,26 +121,26 @@ export class PublishContentUseCase {
         throw new ContentNotFoundError(contentId);
       }
 
-      // 2. コンテンツタイプ取得
+      // 2. Get content type
       const contentType = await this.contentTypeRepository.findById(content.getContentTypeId());
       if (!contentType) {
         throw new ContentTypeNotFoundError(content.getContentTypeId().getValue());
       }
 
-      // 3. ドメインロジック実行
+      // 3. Execute domain logic
       content.publish();
 
-      // 4. 永続化
+      // 4. Persistence
       await this.contentRepository.save(content);
 
-      // 5. ドメインイベント発行
+      // 5. Dispatch domain event
       const event = new ContentPublishedEvent(
         content.getId(),
         content.getPublishedAt()!
       );
       await this.eventDispatcher.dispatch(event);
 
-      // 6. レスポンス
+      // 6. Response
       return this.toResponse(content, contentType);
     });
   }
@@ -160,10 +160,10 @@ export class UpdateContentUseCase {
 
   async execute(contentId: string, request: UpdateContentRequest): Promise<ContentResponse> {
     return await this.transactionManager.executeInTransaction(async () => {
-      // 1. バリデーション
+      // 1. Validation
       const validatedRequest = UpdateContentRequestSchema.parse(request);
       
-      // 2. 既存コンテンツ取得
+      // 2. Get existing content
       const id = ContentId.fromString(contentId);
       const content = await this.contentRepository.findById(id);
       
@@ -171,13 +171,13 @@ export class UpdateContentUseCase {
         throw new ContentNotFoundError(contentId);
       }
 
-      // 3. コンテンツタイプ取得
+      // 3. Get content type
       const contentType = await this.contentTypeRepository.findById(content.getContentTypeId());
       if (!contentType) {
         throw new ContentTypeNotFoundError(content.getContentTypeId().getValue());
       }
 
-      // 4. 更新処理
+      // 4. Update process
       if (validatedRequest.title) {
         const title = ContentTitle.fromString(validatedRequest.title);
         content.updateTitle(title);
@@ -194,7 +194,7 @@ export class UpdateContentUseCase {
         content.updateSlug(slug);
       }
 
-      // 5. 永続化
+      // 5. Persistence
       await this.contentRepository.save(content);
 
       return this.toResponse(content, contentType);
@@ -215,17 +215,17 @@ export class UploadMediaUseCase {
 
   async execute(request: UploadMediaRequest, fileBuffer: ArrayBuffer): Promise<MediaResponse> {
     return await this.transactionManager.executeInTransaction(async () => {
-      // 1. バリデーション
+      // 1. Validation
       const validatedRequest = UploadMediaRequestSchema.parse(request);
 
-      // 2. Value Object作成
+      // 2. Create Value Objects
       const filename = MediaFilename.fromString(validatedRequest.filename);
       const size = MediaSize.fromBytes(validatedRequest.size);
 
-      // 3. R2キー生成
+      // 3. Generate R2 key
       const r2Key = MediaR2Key.generate(filename, validatedRequest.contentType);
 
-      // 4. ファイルアップロード
+      // 4. File upload
       const uploadedUrl = await this.fileStorageService.upload(
         r2Key.getValue(),
         fileBuffer,
@@ -234,10 +234,10 @@ export class UploadMediaUseCase {
       
       const url = MediaUrl.fromString(uploadedUrl);
 
-      // 5. ドメインエンティティ作成
+      // 5. Create domain entity
       const media = Media.create(filename, r2Key, url, size, validatedRequest.contentType);
 
-      // 6. 永続化
+      // 6. Persistence
       await this.mediaRepository.save(media);
 
       return this.toMediaResponse(media);
@@ -246,9 +246,9 @@ export class UploadMediaUseCase {
 }
 ```
 
-### 2.2 Query Use Cases (読み込み操作)
+### 2.2 Query Use Cases (Read Operations)
 
-#### GetPublishedContentListUseCase (CQRS対応)
+#### GetPublishedContentListUseCase (CQRS Compliant)
 ```typescript
 // application/usecases/GetPublishedContentListUseCase.ts
 export class GetPublishedContentListUseCase {
@@ -258,10 +258,10 @@ export class GetPublishedContentListUseCase {
   ) {}
 
   async execute(request: GetContentListRequest): Promise<ContentListResponse> {
-    // 1. リクエストバリデーション
+    // 1. Request validation
     const validatedRequest = GetContentListRequestSchema.parse(request);
     
-    // 2. 検索条件構築
+    // 2. Build search criteria
     const criteria: ContentSearchCriteria = {
       page: validatedRequest.page || 1,
       limit: Math.min(validatedRequest.limit || 10, 100),
@@ -270,7 +270,7 @@ export class GetPublishedContentListUseCase {
       status: 'published',
     };
 
-    // 3. コンテンツタイプフィルター処理
+    // 3. Content type filter process
     if (validatedRequest.contentTypeName) {
       const contentTypeName = ContentTypeName.fromString(validatedRequest.contentTypeName);
       const contentType = await this.contentTypeRepository.findByName(contentTypeName);
@@ -280,10 +280,10 @@ export class GetPublishedContentListUseCase {
       criteria.contentTypeId = contentType.getId();
     }
 
-    // 4. コンテンツ取得（Query Service使用）
+    // 4. Get content (using Query Service)
     const result = await this.contentQueryService.findPublishedContents(criteria);
 
-    // 5. コンテンツタイプ情報取得（バッチ処理で効率化）
+    // 5. Get content type info (optimized with batch processing)
     const contentTypeIds = [...new Set(result.contents.map(c => c.getContentTypeId()))];
     const contentTypes = await Promise.all(
       contentTypeIds.map(id => this.contentTypeRepository.findById(id))
@@ -292,7 +292,7 @@ export class GetPublishedContentListUseCase {
       contentTypes.filter(ct => ct !== null).map(ct => [ct!.getId().getValue(), ct!])
     );
 
-    // 6. レスポンス構築
+    // 6. Build response
     return {
       contents: result.contents.map(content => 
         this.toResponse(content, contentTypeMap.get(content.getContentTypeId().getValue())!)
@@ -325,7 +325,7 @@ export class GetPublishedContentListUseCase {
   }
 }
 
-// 新しいRequest DTO
+// New Request DTO
 export const GetContentListRequestSchema = z.object({
   page: z.number().int().min(1).optional(),
   limit: z.number().int().min(1).max(100).optional(),
@@ -337,32 +337,32 @@ export const GetContentListRequestSchema = z.object({
 export type GetContentListRequest = z.infer<typeof GetContentListRequestSchema>;
 ```
 
-#### GetContentDetailUseCase (CQRS対応)
+#### GetContentDetailUseCase (CQRS Compliant)
 ```typescript
 // application/usecases/GetContentDetailUseCase.ts
 export class GetContentDetailUseCase {
   constructor(
-    private contentRepository: ContentRepositoryInterface, // 個別取得はCommand側でも必要
+    private contentRepository: ContentRepositoryInterface, // Individual retrieval is also needed on the Command side
     private contentTypeRepository: ContentTypeRepositoryInterface
   ) {}
 
   async execute(slug: string): Promise<ContentResponse> {
-    // 1. スラッグ検証
+    // 1. Slug validation
     const contentSlug = ContentSlug.fromString(slug);
     
-    // 2. コンテンツ取得
+    // 2. Get content
     const content = await this.contentRepository.findBySlug(contentSlug);
     
     if (!content) {
       throw new ContentNotFoundError(`Content with slug: ${slug}`);
     }
 
-    // 3. 公開状態チェック（公開コンテンツのみ）
+    // 3. Check published status (published content only)
     if (!content.isPublished()) {
       throw new ContentNotFoundError(`Content with slug: ${slug}`);
     }
 
-    // 4. コンテンツタイプ取得
+    // 4. Get content type
     const contentType = await this.contentTypeRepository.findById(content.getContentTypeId());
     if (!contentType) {
       throw new ContentTypeNotFoundError(content.getContentTypeId().getValue());
@@ -392,7 +392,7 @@ export class GetContentDetailUseCase {
 }
 ```
 
-## 3. DTO設計
+## 3. DTO Design
 
 ### 3.1 Request DTOs
 ```typescript
@@ -402,7 +402,7 @@ export const CreateContentRequestSchema = z.object({
   body: ContentBodySchema,
   slug: ContentSlugSchema.optional(),
   contentTypeId: ContentTypeIdSchema,
-  customFields: z.record(z.any()).optional(), // ContentType固有のフィールド
+  customFields: z.record(z.any()).optional(), // Fields specific to ContentType
 });
 
 export type CreateContentRequest = z.infer<typeof CreateContentRequestSchema>;
@@ -568,15 +568,15 @@ export interface DomainEventDispatcher {
 // application/handlers/ContentPublishedEventHandler.ts
 export class ContentPublishedEventHandler {
   async handle(event: ContentPublishedEvent): Promise<void> {
-    // 公開時の処理（例：通知送信、キャッシュクリア等）
+    // Processing on publish (e.g., send notifications, clear cache, etc.)
     console.log(`Content ${event.contentId.getValue()} was published at ${event.publishedAt}`);
     
-    // 将来的な拡張例:
-    // - 検索インデックス更新
-    // - RSS/Atomフィード更新
-    // - ソーシャルメディア自動投稿
-    // - アナリティクス記録
-    // - サイトマップ更新
+    // Future extension examples:
+    // - Update search index
+    // - Update RSS/Atom feed
+    // - Auto-post to social media
+    // - Record analytics
+    // - Update sitemap
   }
 }
 
@@ -585,10 +585,10 @@ export class ContentCreatedEventHandler {
   async handle(event: ContentCreatedEvent): Promise<void> {
     console.log(`Content ${event.contentId.getValue()} was created for content type ${event.contentTypeId.getValue()}`);
     
-    // 作成時の処理:
-    // - 作成ログ記録
-    // - ワークフロー開始
-    // - テンプレート自動適用
+    // Processing on creation:
+    // - Log creation
+    // - Start workflow
+    // - Auto-apply template
   }
 }
 ```
@@ -605,13 +605,13 @@ export interface FileStorageService {
 
 ## 6. Dependency Injection
 
-### 6.1 Container設計
+### 6.1 Container Design
 ```typescript
 // application/di/Container.ts
 export class Container {
   constructor(private cloudflareEnv: CloudflareEnv) {}
 
-  // Repository instances (Command側)
+  // Repository instances (Command side)
   private getContentRepository(): ContentRepositoryInterface {
     return new PrismaContentRepository(this.getPrismaClient());
   }
@@ -627,7 +627,7 @@ export class Container {
     );
   }
 
-  // Query Service instances (Query側)
+  // Query Service instances (Query side)
   private getContentQueryService(): ContentQueryServiceInterface {
     return new PrismaContentQueryService(this.getPrismaClient());
   }
@@ -698,15 +698,15 @@ export class Container {
 
   getGetPublishedContentListUseCase(): GetPublishedContentListUseCase {
     return new GetPublishedContentListUseCase(
-      this.getContentQueryService(),      // Query Service使用
-      this.getContentTypeQueryService()   // Query Service使用
+      this.getContentQueryService(),      // Use Query Service
+      this.getContentTypeQueryService()   // Use Query Service
     );
   }
 
   getGetContentDetailUseCase(): GetContentDetailUseCase {
     return new GetContentDetailUseCase(
-      this.getContentRepository(),        // 個別取得はCommand側Repository
-      this.getContentTypeRepository()     // Command側Repository
+      this.getContentRepository(),        // Individual retrieval uses Command-side Repository
+      this.getContentTypeRepository()     // Command-side Repository
     );
   }
 
@@ -768,7 +768,7 @@ describe('CreateContentUseCase', () => {
       // Arrange
       const mockContentType = ContentType.create(
         ContentTypeName.fromString('blog_post'),
-        ContentTypeDisplayName.fromString('ブログ記事'),
+        ContentTypeDisplayName.fromString('Blog Post'),
         ContentTypeSchema.fromObject({})
       );
       
@@ -811,9 +811,9 @@ describe('CreateContentUseCase', () => {
 });
 ```
 
-## 8. 利用パターン例
+## 8. Usage Pattern Example
 
-### 8.1 React Router v7 での利用
+### 8.1 Usage with React Router v7
 ```typescript
 // app/routes/admin/api/content/route.ts
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -847,11 +847,18 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
 ---
 
-このCMS対応アプリケーションサービス層設計により、ビジネスロジックを適切にカプセル化し、テストしやすく保守性の高いアプリケーション層を実現できます。汎用的なCMSとしての拡張性と、ブログをはじめとする様々なコンテンツタイプへの対応が可能です。
+This CMS-compliant application service layer design allows for proper encapsulation of business logic, resulting in a highly testable and maintainable application layer. It provides extensibility as a general-purpose CMS and supports various content types, including blogs.
 
-## 関連ドキュメント
-- `blog-design-document.md` - モダンCMS設計書
-- `ddd-domain-design.md` - CMSドメインモデル詳細設計
-- `test-strategy-design.md` - DORAテスト戦略
-- `ddd-development-tickets.md` - CMS開発チケット分割
-- `biome-configuration.md` - Biome v2設定ガイド
+## Related Documents
+- [overview.md](overview.md) - Modern CMS Design Document
+- [domain-design.md](domain-design.md) - CMS Domain Model Detailed Design
+- [../implementation/testing-strategy.md](../implementation/testing-strategy.md) - DORA Testing Strategy
+- [../../development-tickets.md](../../development-tickets.md) - CMS Development Ticket Breakdown
+- [../../biome.json](../../biome.json) - Biome v2 Configuration Guide
+
+---
+
+**Last Updated**: 2025-07-02
+**Version**: 2.0  
+**Status**: Application Layer Design Complete  
+**対象**: アーキテクト・開発者

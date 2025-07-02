@@ -538,16 +538,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 ```
 
-## 10. 関連ドキュメント
+## 10. Related Documents
 
-- [../architecture/overview.md](../architecture/overview.md) - プロジェクト全体概要
-- [testing-strategy.md](testing-strategy.md) - テスト戦略詳細
-- [dependency-injection.md](dependency-injection.md) - DI実装詳細
-- [logging-strategy.md](logging-strategy.md) - ログ実装詳細
+- [../architecture/overview.md](../architecture/overview.md) - Project Overview
+- [testing-strategy.md](testing-strategy.md) - Testing Strategy Details
+- [dependency-injection.md](dependency-injection.md) - DI Implementation Details
+- [logging-strategy.md](logging-strategy.md) - Logging Implementation Details
 
 ---
 
-**作成日**: 2025-06-29  
-**バージョン**: 1.0  
-**ステータス**: 実装ガイド完成  
+**Last Updated**: 2025-07-02
+**Version**: 2.0  
+**Status**: Implementation Guide Complete  
 **対象**: 開発者全員

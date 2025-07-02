@@ -760,15 +760,15 @@ function debugJWT(jwt: string) {
 - [ ] Certificate更新（年次）
 - [ ] 災害復旧テスト（年次）
 
-## 11. 関連ドキュメント
+## 11. Related Documents
 
-- [authentication-security.md](../architecture/authentication-security.md) - 認証・セキュリティアーキテクチャ
-- [zero-trust-security.md](../implementation/zero-trust-security.md) - ゼロトラストセキュリティ実装戦略
-- [react-router-middleware-patterns.md](../implementation/react-router-middleware-patterns.md) - React Router Middleware実装パターン
+- [authentication-security.md](../architecture/authentication-security.md) - Authentication & Security Architecture
+- [zero-trust-security.md](../implementation/zero-trust-security.md) - Zero Trust Security Implementation Strategy
+- [react-router-middleware-patterns.md](../implementation/react-router-middleware-patterns.md) - React Router Middleware Implementation Patterns
 
 ---
 
-**作成日**: 2025-07-01  
-**バージョン**: 1.0  
-**ステータス**: 設定ガイド完成  
+**Last Updated**: 2025-07-02
+**Version**: 2.0  
+**Status**: Configuration Guide Complete  
 **対象**: Cloudflare Access Free/Paid プラン

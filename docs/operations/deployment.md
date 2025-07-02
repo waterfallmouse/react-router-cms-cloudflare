@@ -1212,11 +1212,11 @@ console.log('Memory usage:', process.memoryUsage());
 └── シンプル優先          └── スケーラビリティ優先
 ```
 
-## 13. 関連ドキュメント
+## 13. Related Documents
 
-- [monitoring.md](monitoring.md) - 監視・メトリクス詳細
-- [../architecture/infrastructure.md](../architecture/infrastructure.md) - インフラ技術選定・設計思想
-- [../implementation/development-guide.md](../implementation/development-guide.md) - 開発ガイド
+- [monitoring.md](monitoring.md) - Monitoring & Metrics Details
+- [../architecture/infrastructure.md](../architecture/infrastructure.md) - Infrastructure Technology Selection & Design Philosophy
+- [../implementation/development-guide.md](../implementation/development-guide.md) - Development Guide
 
 ## 14. 参考リンク
 
@@ -1226,8 +1226,7 @@ console.log('Memory usage:', process.memoryUsage());
 
 ---
 
-**作成日**: 2025-06-29  
-**最終更新**: 2025-07-01  
-**バージョン**: 2.0  
-**ステータス**: Terraform統合デプロイ戦略完成  
+**Last Updated**: 2025-07-02
+**Version**: 2.0  
+**Status**: Terraform Integrated Deployment Strategy Complete  
 **対象**: DevOps・運用チーム（Infrastructure as Code 対応版）
